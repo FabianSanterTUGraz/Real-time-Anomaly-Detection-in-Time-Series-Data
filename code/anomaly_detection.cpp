@@ -43,7 +43,7 @@ int main()
 
     // Settings of sliding window and tde vector.
     int dimensions = 13;
-    int tau = 1;
+    int tau = 15;
     int windowSize = 100000; // theoretisch extrem groß wählen
 
     float slidingWindow[windowSize] = {0.0f};
@@ -55,10 +55,13 @@ int main()
     float runningMean[dimensions] = {0.0f};
     float runningCov[dimensions * dimensions] = {0.0f};
 
-    float eigenvalues[dimensions] = {0.0f};
-    float eigenvectors[dimensions * dimensions] = {0.0f};
+    float principalComponent1[dimensions] = {0.0f};
+    float principalComponent2[dimensions] = {0.0f};
+    
+    principalComponent1[0] = 1.0f; // Vprev starts at identity
+    principalComponent2[1] = 1.0f; // Vprev starts at identity
 
-    int sampleCount = 0;
+
     float outX = 0.0f;
     float outY = 0.0f;
 
@@ -74,8 +77,8 @@ int main()
         }
         float value = std::stof(line);
 
-        if (processNewDataPoint(value, tde, slidingWindow, runningMean, runningCov, eigenvalues,
-                                eigenvectors, tdeIndexes, windowSize, dimensions, &sampleCount,
+        if (processNewDataPoint(value, tde, slidingWindow, runningMean, runningCov, principalComponent1,
+                                principalComponent2, tdeIndexes, windowSize, dimensions,
                                 &outX, &outY) != 1)
         {
             writeToFile.push_back(outX);
@@ -83,7 +86,7 @@ int main()
         }
     }
 
-    std::string outputPath = "Data/output.txt";
+    std::string outputPath = "output/output.txt";
     writeData(outputPath, writeToFile, false);
     return 0;
 }

@@ -3,7 +3,7 @@ import pandas as pd
 from matplotlib.pyplot import colormaps
 import matplotlib.pyplot as plt
 
-file_path = r'C:\Users\39320\Desktop\bachelor_thesis\Bachelor_Thesis_Code\Implementation\Data\output.txt'
+file_path = r'C:\Users\39320\Desktop\Real-time-Anomaly-Detection-in-Time-Series-Data\code\output\output.txt'
 
 # MODIFIED: Use read_csv and specify the comma delimiter to unpack columns
 # names=['X', 'Y'] assigns clean column names automatically

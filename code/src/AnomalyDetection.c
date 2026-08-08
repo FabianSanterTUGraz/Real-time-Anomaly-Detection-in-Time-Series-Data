@@ -5,26 +5,36 @@
 
 // Main api calls
 int processNewDataPoint(float newValue, float* tde, float* slidingWindow, float* runningMean,
-                        float* runningCov, float* eigenvalues, float* eigenvectors, int* indexes,
-                        int windowSize, int dimensions, int* sampleCount, float* outX, float* outY)
+                        float* runningCov, float* principalComponent1, float* principalComponent2, int* indexes,
+                        int windowSize, int dimensions, float* outX, float* outY)
 {
-    int enoughtInformation =
-        PCA(runningMean, runningCov, tde, slidingWindow, dimensions, windowSize, newValue, indexes);
-    if (enoughtInformation == 0)
+    if (PCA(runningMean, runningCov, tde, slidingWindow, dimensions, windowSize, newValue, indexes) == 1)
     {
         return 1;
     }
+    float covNormalized[dimensions * dimensions];
+    float maxVal = 0.0f;
+    for (int i = 0; i < dimensions * dimensions; i++) {
+        float absVal = fabsf(runningCov[i]);
+        if (absVal > maxVal) maxVal = absVal;
+    }
 
-    int tau = indexes[0] - indexes[1];
+    float scale = (maxVal > 1.0f) ? maxVal : 1.0f;
+    for (int i = 0; i < dimensions * dimensions; i++) {
+        covNormalized[i] = runningCov[i] / scale;
+    }
 
-    jacobiEigenvalue(runningCov, dimensions, eigenvalues, eigenvectors);
-    int principalComponent1 = 0;
-    int principalComponent2 = 0;
+    //jacobiEigenvalue(runningCov, dimensions, eigenvalues, eigenvectors);
+    //int principalComponent1 = 0;
+    //int principalComponent2 = 0;
 
-    findTopTwoComponents(eigenvalues, dimensions, &principalComponent1, &principalComponent2);
+    subspaceIteration(covNormalized, dimensions, principalComponent1, principalComponent2);
 
-    projectData(tde, eigenvectors, dimensions, principalComponent1, outX);
-    projectData(tde, eigenvectors, dimensions, principalComponent2, outY);
+    //projectData(tde, eigenvectors, dimensions, principalComponent1, outX);
+    //projectData(tde, eigenvectors, dimensions, principalComponent2, outY);
+    *outX = dotProduct(tde,principalComponent1,dimensions);
+    *outY = dotProduct(tde,principalComponent2,dimensions);
+
 
     return 0;
 }
@@ -57,97 +67,37 @@ void embeddingIndexes(int* buffer, int windowSize, int dimensions, int tau)
     }
 }
 
-void jacobiEigenvalue(float* runningCov, int dim, float* eigenvalues, float* eigenvectors)
+
+
+void matMul(const float* A, const float* B, float* result, int dim)
 {
-    // 1. Initialize Eigenvectors as Identity Matrix
     for (int i = 0; i < dim; i++)
     {
         for (int j = 0; j < dim; j++)
         {
-            // set diagonale to 1 and off diagonal to 0.
-            eigenvectors[indexAccessHelper(i, j, dim)] = (i == j) ? 1.0f : 0.0f;
+            float sum = 0.0f;
+            for (int k = 0; k < dim; k++)
+            {
+                sum += A[indexAccessHelper(i, k, dim)] * B[indexAccessHelper(k, j, dim)];
+            }
+            result[indexAccessHelper(i, j, dim)] = sum;
         }
     }
+}
 
-    float A[dim * dim];
-    copyArray(runningCov, A, dim * dim);
-
-    for (int iter = 0; iter < MAX_ITERATIONS; iter++)
-    {
-        // Find the largest off-diagonal element A[p][q]
-        int p = 0, q = 1;
-        float max_val = fabs(A[indexAccessHelper(0, 1, dim)]); // or std::abs(),Math.abs()
-
-        for (int i = 0; i < dim; i++)
-        {
-            for (int j = i + 1; j < dim; j++)
-            {
-                float val = fabs(A[indexAccessHelper(i, j, dim)]);
-                if (val > max_val)
-                {
-                    max_val = val;
-                    p = i;
-                    q = j;
-                }
-            }
-        }
-
-        // Check Cif value converges to epsilon
-        if (max_val < EPSILON)
-        {
-            break;
-        }
-
-        float app = A[indexAccessHelper(p, p, dim)];
-        float aqq = A[indexAccessHelper(q, q, dim)];
-        float apq = A[indexAccessHelper(p, q, dim)];
-
-        float theta = (aqq - app) / (2.0f * apq);
-        float abs_theta = fabs(theta);
-
-        // c++ : std::sqrt(), java: Math.sqrt()
-        float t = 1.0f / (abs_theta + sqrt(theta * theta + 1.0f));
-        if (theta < 0.0f)
-        {
-            t = -t;
-        }
-
-        float c = 1.0f / sqrt(t * t + 1.0f);
-        float s = t * c;
-
-        float app_new = c * c * app - 2.0f * s * c * apq + s * s * aqq;
-        float aqq_new = s * s * app + 2.0f * s * c * apq + c * c * aqq;
-
-        A[indexAccessHelper(p, p, dim)] = app_new;
-        A[indexAccessHelper(q, q, dim)] = aqq_new;
-        A[indexAccessHelper(p, q, dim)] = 0.0f;
-        A[indexAccessHelper(q, p, dim)] = 0.0f;
-
-        for (int i = 0; i < dim; i++)
-        {
-            if (i != p && i != q)
-            {
-                float aip = A[indexAccessHelper(i, p, dim)];
-                float aiq = A[indexAccessHelper(i, q, dim)];
-                A[indexAccessHelper(i, p, dim)] = c * aip - s * aiq;
-                A[p * dim + i] = c * aip - s * aiq;
-                A[indexAccessHelper(i, q, dim)] = s * aip + c * aiq;
-                A[q * dim + i] = s * aip + c * aiq;
-            }
-        }
-
-        for (int i = 0; i < dim; i++)
-        {
-            float vip = eigenvectors[indexAccessHelper(i, p, dim)];
-            float viq = eigenvectors[indexAccessHelper(i, q, dim)];
-            eigenvectors[indexAccessHelper(i, p, dim)] = c * vip - s * viq;
-            eigenvectors[indexAccessHelper(i, q, dim)] = s * vip + c * viq;
-        }
-    }
-
+void matMulTransposeA(const float* A, const float* B, float* result, int dim)
+{
     for (int i = 0; i < dim; i++)
     {
-        eigenvalues[i] = A[indexAccessHelper(i, i, dim)];
+        for (int j = 0; j < dim; j++)
+        {
+            float sum = 0.0f;
+            for (int k = 0; k < dim; k++)
+            {
+                sum += A[indexAccessHelper(k, i, dim)] * B[indexAccessHelper(k, j, dim)];
+            }
+            result[indexAccessHelper(i, j, dim)] = sum;
+        }
     }
 }
 
@@ -176,6 +126,94 @@ void findTopTwoComponents(const float* eigenvalues, int dim, int* idx_pc1, int* 
     *idx_pc2 = second;
 }
 
+
+void subspaceIteration(const float* runningCov, int dim, float* q1, float* q2)
+{
+    // Store previous vectors for sign continuity
+    float q1_old[dim], q2_old[dim];
+    for (int i = 0; i < dim; i++) {
+        q1_old[i] = q1[i];
+        q2_old[i] = q2[i];
+    }
+
+    const int ITERATIONS = 3; 
+    float z1[dim], z2[dim];
+
+    for (int iter = 0; iter < ITERATIONS; iter++)
+    {
+        // Step 1: Matrix multiplication Z = C * Q
+        for (int i = 0; i < dim; i++)
+        {
+            z1[i] = 0.0f;
+            z2[i] = 0.0f;
+            for (int j = 0; j < dim; j++)
+            {
+                int idx = indexAccessHelper(i, j, dim);
+                z1[i] += runningCov[idx] * q1[j];
+                z2[i] += runningCov[idx] * q2[j];
+            }
+        }
+
+        // Step 2: Gram-Schmidt Orthogonalization
+        float norm1 = sqrt(dotProduct(z1, z1, dim));
+        if (norm1 > 1e-6f) {
+            for (int i = 0; i < dim; i++) q1[i] = z1[i] / norm1;
+        } else {
+            for (int i = 0; i < dim; i++) q1[i] = 0.0f;
+            q1[0] = 1.0f;
+        }
+
+        float dot12 = dotProduct(q1, z2, dim);
+        for (int i = 0; i < dim; i++) z2[i] -= dot12 * q1[i];
+
+        float norm2 = sqrt(dotProduct(z2, z2, dim));
+        if (norm2 > 1e-6f) {
+            for (int i = 0; i < dim; i++) q2[i] = z2[i] / norm2;
+        } else {
+            for (int i = 0; i < dim; i++) q2[i] = 0.0f;
+            if (dim > 1) q2[1] = 1.0f;
+        }
+    }
+
+    // Step 3: 2x2 Subspace Diagonalization (Locks rotation angle in 2D plane)
+    // Compute A = Q^T * C * Q
+    float a11 = 0.0f, a12 = 0.0f, a22 = 0.0f;
+    for (int i = 0; i < dim; i++) {
+        float C_q1_i = 0.0f, C_q2_i = 0.0f;
+        for (int j = 0; j < dim; j++) {
+            int idx = indexAccessHelper(i, j, dim);
+            C_q1_i += runningCov[idx] * q1[j];
+            C_q2_i += runningCov[idx] * q2[j];
+        }
+        a11 += q1[i] * C_q1_i;
+        a12 += q1[i] * C_q2_i;
+        a22 += q2[i] * C_q2_i;
+    }
+
+    // 2x2 Symmetric Eigendecomposition to find internal rotation angle theta
+    if (fabs(a12) > 1e-6f) {
+        float theta = 0.5f * atan2f(2.0f * a12, a11 - a22);
+        float c = cosf(theta);
+        float s = sinf(theta);
+
+        // Rotate basis vectors to align with principal axes inside the 2D subspace
+        for (int i = 0; i < dim; i++) {
+            float u1 = c * q1[i] + s * q2[i];
+            float u2 = -s * q1[i] + c * q2[i];
+            q1[i] = u1;
+            q2[i] = u2;
+        }
+    }
+
+    // Step 4: Sign-locking (Prevents vectors from flipping 180 degrees)
+    if (dotProduct(q1, q1_old, dim) < 0.0f) {
+        for (int i = 0; i < dim; i++) q1[i] = -q1[i];
+    }
+    if (dotProduct(q2, q2_old, dim) < 0.0f) {
+        for (int i = 0; i < dim; i++) q2[i] = -q2[i];
+    }
+}
+
 void projectData(float* tde, float* eigenvectors, int dimensions, int targetComponentIdx,
                  float* outputProjection)
 {
@@ -189,34 +227,32 @@ void projectData(float* tde, float* eigenvectors, int dimensions, int targetComp
     *outputProjection = sum;
 }
 
-int validEmbeddingCount(int sampleCount, int dimensions, int windowSize, int tau)
-{
-    int capacity = windowSize - (dimensions - 1) * tau;
-    int rawValidCount = sampleCount - (dimensions - 1) * tau;
-    return rawValidCount > capacity ? capacity : rawValidCount;
-}
 
 int PCA(float* runningMean, float* runningCov, float* tde, float* slidingWindow, int dimensions,
         int windowSize, float newValue, int* indexes)
 {
     static int sampleCount = 0;
     int tau = indexes[0] - indexes[1]; // Deduce tau spacing dynamically
+    bool isWindowFull = (sampleCount >= windowSize);
+
+    // Only extract evicted sample if the sliding window is full
     float tdeOldRaw[dimensions];
-    for (int i = 0; i < dimensions; i++)
+    if (isWindowFull)
     {
-        tdeOldRaw[i] = slidingWindow[(dimensions - 1 - i) * tau];
+        for (int i = 0; i < dimensions; i++)
+        {
+            tdeOldRaw[i] = slidingWindow[(dimensions - 1 - i) * tau];
+        }
     }
 
     slideWindow(slidingWindow, windowSize, newValue);
     sampleCount++;
 
-    if (sampleCount < dimensions)
+    int minSamples = (dimensions - 1) * tau + 1;
+    if (sampleCount < minSamples)
     {
-        return 0; // not enough raw history yet for a single valid embedded vector
+        return 1; // Wait until enough delay steps have accumulated
     }
-    int n = sampleCount - (dimensions - 1) * tau;
-
-    int rawValidCount = sampleCount - (dimensions - 1) * tau;
 
     embedding(tde, slidingWindow, dimensions, indexes); // raw, uncentered new embedded vector
 
@@ -224,23 +260,35 @@ int PCA(float* runningMean, float* runningCov, float* tde, float* slidingWindow,
     // as it was before updateMean runs below, not with the just-updated mean.
     float tdeOldCentered[dimensions];
 
-    centerData(runningMean, tdeOldRaw, tdeOldCentered, dimensions);
+    if (isWindowFull)
+    {
+        centerData(runningMean, tdeOldRaw, tdeOldCentered, dimensions);
+    }
 
-    updateMean(runningMean, dimensions, n, tde);
+    int n = isWindowFull ? (windowSize - (dimensions - 1) * tau) : (sampleCount - (dimensions - 1) * tau);
 
+    updateMean(runningMean, dimensions, n, tde, isWindowFull ? tdeOldRaw : NULL);
     centerData(runningMean, tde, tde, dimensions);
 
-    updateCovariance(runningCov, dimensions, tde, NULL);
-
-    return 1;
+    // Pass 'n' here to keep covariance bounded
+    updateCovariance(runningCov, dimensions, tde, isWindowFull ? tdeOldCentered : NULL, n);
+    return 0;
 }
 
-void updateMean(float* runningMean, int dimensions, int n, const float* newEmbedded)
+void updateMean(float* runningMean, int dimensions, int n, const float* newEmbedded, const float* oldEmbedded)
 {
-    // Window full: evict the oldest embedded vector, add the newest; n stays at capacity.
     for (int i = 0; i < dimensions; i++)
     {
-        runningMean[i] += (newEmbedded[i] - runningMean[i]) / (float)n;
+        if (oldEmbedded != NULL)
+        {
+            // Fixed window size
+            runningMean[i] += (newEmbedded[i] - oldEmbedded[i]) / (float)n;
+        }
+        else
+        {
+            // Growing window size
+            runningMean[i] += (newEmbedded[i] - runningMean[i]) / (float)n;
+        }
     }
 }
 
@@ -266,19 +314,38 @@ int indexAccessHelper(int row, int column, int dimensions)
 }
 
 void updateCovariance(float* runningCov, int dimensions, const float* newCentered,
-                      const float* oldCentered)
+                      const float* oldCentered, int n)
 {
+    if (n <= 1) return;
+
     for (int i = 0; i < dimensions; i++)
     {
         for (int j = 0; j < dimensions; j++)
         {
             int covIdx = indexAccessHelper(i, j, dimensions);
-            float contribution = newCentered[i] * newCentered[j];
+            
             if (oldCentered != NULL)
             {
-                contribution -= oldCentered[i] * oldCentered[j];
+                // Sliding window (fixed n): Add new, subtract old
+                float contribution = (newCentered[i] * newCentered[j]) - (oldCentered[i] * oldCentered[j]);
+                runningCov[covIdx] += contribution / (float)n;
             }
-            runningCov[covIdx] += contribution;
+            else
+            {
+                // Growing window (increasing n): Running average update
+                float contribution = newCentered[i] * newCentered[j];
+                runningCov[covIdx] += (contribution - runningCov[covIdx]) / (float)n;
+            }
         }
     }
+}
+
+float dotProduct(const float* v1, const float* v2, int dim)
+{
+    float sum = 0.0f;
+    for (int i = 0; i < dim; i++)
+    {
+        sum += v1[i] * v2[i];
+    }
+    return sum;
 }
