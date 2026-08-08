@@ -1,0 +1,89 @@
+#include <fstream>
+#include <iostream>
+#include <vector>
+
+#include "include/streamingData.hpp"
+#include "include/AnomalyDetection.h"
+#include "include/utils.h"
+
+void writeData(std::string filePath, std::vector<float> fileToWrite, bool append = true)
+{
+    std::ofstream MyFile;
+    if (append)
+    {
+        MyFile.open(filePath, std::ios_base::app);
+    }
+    else
+    {
+        MyFile.open(filePath);
+    }
+
+    if (!MyFile.is_open())
+    {
+        std::cerr << "Error: Could not open or create file at path: " << filePath << std::endl;
+        return;
+    }
+
+    for (std::size_t i = 0; i < fileToWrite.size(); i += 2)
+    {
+        MyFile << fileToWrite.at(i) << "," << fileToWrite.at(i + 1) << std::endl;
+    }
+    MyFile.close();
+}
+
+int main()
+{
+    std::vector<float> writeToFile;
+    std::cout << "Real time anomaly detection...." << std::endl;
+    int i = 20;
+    std::string fileInput = std::to_string(i);
+    std::string absolutePath = "Data/" + fileInput + ".csv";
+    streamData DataStream(absolutePath);
+    std::string line;
+
+    // Settings of sliding window and tde vector.
+    int dimensions = 13;
+    int tau = 1;
+    int windowSize = 100000; // theoretisch extrem groß wählen
+
+    float slidingWindow[windowSize] = {0.0f};
+    float tde[dimensions] = {0.0f};
+
+    int tdeIndexes[dimensions];
+    embeddingIndexes(tdeIndexes, windowSize, dimensions, tau);
+
+    float runningMean[dimensions] = {0.0f};
+    float runningCov[dimensions * dimensions] = {0.0f};
+
+    float eigenvalues[dimensions] = {0.0f};
+    float eigenvectors[dimensions * dimensions] = {0.0f};
+
+    int sampleCount = 0;
+    float outX = 0.0f;
+    float outY = 0.0f;
+
+    // No separate warm-up phase: processNewDataPoint is safe to call from the very first
+    // sample and reports readiness via its return value once there's enough history for a
+    // valid embedded vector and a defined covariance (n >= 2).
+    while (DataStream.hasNext())
+    {
+        DataStream.next(line);
+        if (line.empty())
+        {
+            break;
+        }
+        float value = std::stof(line);
+
+        if (processNewDataPoint(value, tde, slidingWindow, runningMean, runningCov, eigenvalues,
+                                eigenvectors, tdeIndexes, windowSize, dimensions, &sampleCount,
+                                &outX, &outY) != 1)
+        {
+            writeToFile.push_back(outX);
+            writeToFile.push_back(outY);
+        }
+    }
+
+    std::string outputPath = "Data/output.txt";
+    writeData(outputPath, writeToFile, false);
+    return 0;
+}

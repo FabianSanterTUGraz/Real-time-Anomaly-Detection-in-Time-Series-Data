@@ -1,0 +1,44 @@
+#ifndef ANOMALYDETECTION_H
+#define ANOMALYDETECTION_H
+
+#include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include "../include/utils.h"
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+    int processNewDataPoint(float newValue, float* tde, float* slidingWindow, float* runningMean,
+                            float* runningCov, float* eigenvalues, float* eigenvectors,
+                            int* indexes, int windowSize, int dimensions, int* sampleCount,
+                            float* outX, float* outY);
+
+    void slideWindow(float* slidingWindow, int size, float value);
+    void embedding(float* buffer, float* slidingWindow, int size, int* indexes);
+    void embeddingIndexes(int* buffer, int windowSize, int dimensions, int tau);
+    int PCA(float* runningMean, float* runningCov, float* tde, float* slidingWindow, int dimensions,
+            int windowSize, float newValue, int* indexes);
+
+    int validEmbeddingCount(int sampleCount, int dimensions, int windowSize, int tau);
+    void updateMean(float* mean, int dimensions, int n, const float* oldEmbedded);
+
+    void centerData(float* runningMean, float* tdeIn, float* tdeOut, int dimensions);
+
+    void copyArray(float* inputArray, float* outputArray, int dimensions);
+    int indexAccessHelper(int row, int column, int dimensions);
+
+    void updateCovariance(float* runningCov, int dimensions, const float* newCentered,
+                          const float* oldCentered);
+
+    void jacobiEigenvalue(float* runningCov, int dim, float* eigenvalues, float* eigenvectors);
+    void findTopTwoComponents(const float* eigenvalues, int dim, int* idx_pc1, int* idx_pc2);
+    void projectData(float* tde, float* eigenvectors, int dimensions, int targetComponentIdx,
+                     float* outputProjection);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // ANOMALYDETECTION_H
