@@ -1,20 +1,31 @@
+import os
+
 import numpy as np
 import pandas as pd
 from matplotlib.pyplot import colormaps
 import matplotlib.pyplot as plt
 
-file_path = r'C:\Users\39320\Desktop\Real-time-Anomaly-Detection-in-Time-Series-Data\code\output\output.txt'
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.join(SCRIPT_DIR, "..", "..")
+OUTPUT_PATH = os.path.join(SCRIPT_DIR, "..", "output", "output.txt")
+BENCHMARK_RESULTS_PATH = os.path.join(REPO_ROOT, "benchmarkCode", "data", "benchmarkResults.txt")
+DYNAMIC_RESULT_PLOT_PATH = os.path.join(REPO_ROOT, "benchmarkCode", "data", "DynamicResult.png")
 
-# MODIFIED: Use read_csv and specify the comma delimiter to unpack columns
-# names=['X', 'Y'] assigns clean column names automatically
-df = pd.read_csv(file_path, nrows= 30000, header=None, sep=',', names=['X', 'Y'])
+df = pd.read_csv(OUTPUT_PATH, nrows=111563, header=None, sep=',', names=['X', 'Y'])
 
 print("First few rows of extracted coordinates:")
 print(df.head())
+
 projected = df[['X', 'Y']].to_numpy()
 
-# Color by distance from the origin, same as the reference implementation's
-# "scores" (norm of each projected point), normalized to [0, 1].
+#sign correction to visually get the same result as the static version which uses sklearn sign correction
+benchmark = np.loadtxt(BENCHMARK_RESULTS_PATH, delimiter=",")
+rows = min(len(projected), len(benchmark))
+sign = np.sign(np.sum(projected[:rows] * benchmark[:rows], axis=0))
+sign[sign == 0] = 1
+projected = projected * sign
+print(f"Sign correction applied per column (x, y): {sign}")
+
 scores = np.linalg.norm(projected, axis=1)
 scores_norm = (scores - np.min(scores)) / (np.max(scores) - np.min(scores))
 
@@ -27,5 +38,5 @@ ax.axis("off")
 ax.set_title("TDE", fontsize=30)
 
 # Save the fingerprint layout graph
-plt.savefig("tde.png")
+plt.savefig(DYNAMIC_RESULT_PLOT_PATH)
 plt.show()

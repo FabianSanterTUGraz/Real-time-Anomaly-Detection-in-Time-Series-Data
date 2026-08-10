@@ -1,9 +1,6 @@
 #include "../include/AnomalyDetection.h"
 
-#define MAX_ITERATIONS 100
-#define EPSILON 1e-6f
-
-// Main api calls
+// Main api call
 int processNewDataPoint(float newValue, float* tde, float* slidingWindow, float* runningMean,
                         float* runningCov, float* principalComponent1, float* principalComponent2, int* indexes,
                         int windowSize, int dimensions, float* outX, float* outY)
@@ -49,8 +46,6 @@ void embeddingIndexes(int* buffer, int windowSize, int dimensions, int tau)
     }
 }
 
-
-
 void matMul(const float* A, const float* B, float* result, int dim)
 {
     for (int i = 0; i < dim; i++)
@@ -66,48 +61,6 @@ void matMul(const float* A, const float* B, float* result, int dim)
         }
     }
 }
-
-void matMulTransposeA(const float* A, const float* B, float* result, int dim)
-{
-    for (int i = 0; i < dim; i++)
-    {
-        for (int j = 0; j < dim; j++)
-        {
-            float sum = 0.0f;
-            for (int k = 0; k < dim; k++)
-            {
-                sum += A[indexAccessHelper(k, i, dim)] * B[indexAccessHelper(k, j, dim)];
-            }
-            result[indexAccessHelper(i, j, dim)] = sum;
-        }
-    }
-}
-
-void findTopTwoComponents(const float* eigenvalues, int dim, int* idx_pc1, int* idx_pc2)
-{
-    int first = 0, second = -1;
-    float max1 = eigenvalues[0];
-    float max2 = -1e9f;
-
-    for (int i = 1; i < dim; i++)
-    {
-        if (eigenvalues[i] > max1)
-        {
-            max2 = max1;
-            second = first;
-            max1 = eigenvalues[i];
-            first = i;
-        }
-        else if (eigenvalues[i] > max2)
-        {
-            max2 = eigenvalues[i];
-            second = i;
-        }
-    }
-    *idx_pc1 = first;
-    *idx_pc2 = second;
-}
-
 
 void subspaceIteration(const float* runningCov, int dim, float* q1, float* q2)
 {
@@ -155,21 +108,6 @@ void subspaceIteration(const float* runningCov, int dim, float* q1, float* q2)
     }
 }
 
-
-void projectData(float* tde, float* eigenvectors, int dimensions, int targetComponentIdx,
-                 float* outputProjection)
-{
-    float sum = 0.0f;
-    for (int i = 0; i < dimensions; i++)
-    {
-        int matrixIndex = indexAccessHelper(i, targetComponentIdx,
-                                            dimensions); // i * dimensions + targetComponentIdx;
-        sum += tde[i] * eigenvectors[matrixIndex];
-    }
-    *outputProjection = sum;
-}
-
-
 int PCA(float* runningMean, float* runningCov, float* tde, float* slidingWindow, int dimensions,
         int windowSize, float newValue, int* indexes)
 {
@@ -211,6 +149,7 @@ int PCA(float* runningMean, float* runningCov, float* tde, float* slidingWindow,
 
     return 0;
 }
+
 void updateMean(float* runningMean, int dimensions, int sampleSize, const float* newEmbedded, const float* oldEmbedded)
 {
     for (int i = 0; i < dimensions; i++)

@@ -42,9 +42,11 @@ int main()
     std::string line;
 
     // Settings of sliding window and tde vector.
+    // dimensions/tau must match d/tau in static_fingerprintvisualization.py
+    // so the streaming and batch PCA embed the same windows for computeDelta.py.
     int dimensions = 13;
     int tau = 15;
-    int windowSize = 100000; // theoretisch extrem groß wählen
+    int windowSize = 111562; // theoretisch extrem groß wählen
 
     float slidingWindow[windowSize] = {0.0f};
     float tde[dimensions] = {0.0f};
@@ -65,9 +67,6 @@ int main()
     float outX = 0.0f;
     float outY = 0.0f;
 
-    // No separate warm-up phase: processNewDataPoint is safe to call from the very first
-    // sample and reports readiness via its return value once there's enough history for a
-    // valid embedded vector and a defined covariance (n >= 2).
     while (DataStream.hasNext())
     {
         DataStream.next(line);
