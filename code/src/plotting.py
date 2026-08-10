@@ -11,7 +11,6 @@ df = pd.read_csv(file_path, nrows= 30000, header=None, sep=',', names=['X', 'Y']
 
 print("First few rows of extracted coordinates:")
 print(df.head())
-
 projected = df[['X', 'Y']].to_numpy()
 
 # Color by distance from the origin, same as the reference implementation's
