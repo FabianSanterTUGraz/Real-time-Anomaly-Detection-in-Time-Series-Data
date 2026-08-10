@@ -13,7 +13,6 @@ from sklearn.decomposition import PCA
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_PATH = os.path.join(SCRIPT_DIR, "..", "code", "Data", "20.csv")
-COV_MATRIX_PATH = os.path.join(SCRIPT_DIR, "..", "python_cov_matrix.txt")
 BENCHMARK_RESULTS_PATH = os.path.join(SCRIPT_DIR, "data", "benchmarkResults.txt")
 STATIC_RESULT_PLOT_PATH = os.path.join(SCRIPT_DIR, "data", "StaticResult.png")
 
@@ -40,7 +39,6 @@ def plot_embedding(ax, tde, title="TDE", benchmark_results_path=BENCHMARK_RESULT
     print("Covariance Matrix Shape:", cov_matrix.shape)
     print("Top-left 3x3 corner:\n", cov_matrix[:3, :3])
 
-    np.savetxt(COV_MATRIX_PATH, cov_matrix, fmt="%.6f")
     np.savetxt(benchmark_results_path, projected, delimiter=",", fmt="%.6f")
 
     scores = []

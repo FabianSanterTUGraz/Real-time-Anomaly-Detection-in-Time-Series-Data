@@ -46,22 +46,6 @@ void embeddingIndexes(int* buffer, int windowSize, int dimensions, int tau)
     }
 }
 
-void matMul(const float* A, const float* B, float* result, int dim)
-{
-    for (int i = 0; i < dim; i++)
-    {
-        for (int j = 0; j < dim; j++)
-        {
-            float sum = 0.0f;
-            for (int k = 0; k < dim; k++)
-            {
-                sum += A[indexAccessHelper(i, k, dim)] * B[indexAccessHelper(k, j, dim)];
-            }
-            result[indexAccessHelper(i, j, dim)] = sum;
-        }
-    }
-}
-
 void subspaceIteration(const float* runningCov, int dim, float* q1, float* q2)
 {
     float q1_old[dim];

@@ -17,8 +17,11 @@ extern "C"
                             float* outX, float* outY);
 
     void slideWindow(float* slidingWindow, int size, float value);
+
     void embedding(float* buffer, float* slidingWindow, int size, int* indexes);
+
     void embeddingIndexes(int* buffer, int windowSize, int dimensions, int tau);
+
     int PCA(float* runningMean, float* runningCov, float* tde, float* slidingWindow, int dimensions,
             int windowSize, float newValue, int* indexes);
 
@@ -27,24 +30,15 @@ extern "C"
     void centerData(float* runningMean, float* tdeIn, float* tdeOut, int dimensions);
 
     void copyArray(float* inputArray, float* outputArray, int dimensions);
-    int indexAccessHelper(int row, int column, int dimensions);
 
-    void matMul(const float* A, const float* B, float* result, int dim);
-    void matMulTransposeA(const float* A, const float* B, float* result, int dim);
+    int indexAccessHelper(int row, int column, int dimensions);
 
     void updateCovariance(float* runningCov, int dimensions, const float* newCentered,
                       const float* oldCentered, int n);
 
-    void findTopTwoComponents(const float* eigenvalues, int dim, int* idx_pc1, int* idx_pc2);
-    void projectData(float* tde, float* eigenvectors, int dimensions, int targetComponentIdx,
-                     float* outputProjection);
-
     float dotProduct(const float* v1, const float* v2, int dim);
 
     void subspaceIteration(const float* runningCov,int dimensions, float* tde1, float* tde2);
-
-
-
 #ifdef __cplusplus
 }
 #endif

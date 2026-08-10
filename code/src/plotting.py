@@ -7,7 +7,8 @@ import matplotlib.pyplot as plt
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.join(SCRIPT_DIR, "..", "..")
-OUTPUT_PATH = os.path.join(SCRIPT_DIR, "..", "output", "output.txt")
+OUTPUT_PATH = r"C:\Users\39320\Desktop\Real-time-Anomaly-Detection-in-Time-Series-Data\code\output\output.txt"
+DELTA_PATH = r"C:\Users\39320\Desktop\Real-time-Anomaly-Detection-in-Time-Series-Data\benchmarkCode\data\deltaOutput.txt"
 BENCHMARK_RESULTS_PATH = os.path.join(REPO_ROOT, "benchmarkCode", "data", "benchmarkResults.txt")
 DYNAMIC_RESULT_PLOT_PATH = os.path.join(REPO_ROOT, "benchmarkCode", "data", "DynamicResult.png")
 
