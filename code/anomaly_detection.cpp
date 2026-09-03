@@ -1,10 +1,10 @@
+#include <algorithm>
 #include <fstream>
 #include <iostream>
 #include <vector>
 
 #include "include/streamingData.hpp"
 #include "include/AnomalyDetection.h"
-#include "include/utils.h"
 
 void writeData(std::string filePath, std::vector<float> fileToWrite, bool append = true)
 {
@@ -31,39 +31,43 @@ void writeData(std::string filePath, std::vector<float> fileToWrite, bool append
     MyFile.close();
 }
 
-int main()
+int main(int argc, char* argv[])
 {
     std::vector<float> writeToFile;
     std::cout << "Real time anomaly detection...." << std::endl;
-    int i = 20;
-    std::string fileInput = std::to_string(i);
+    //std::string fileInput = "19 - m1_mechanically_imbalanced_load_0.5Nm_m2_mechanically_imbalanced_on_background_half_speed";
+    std::string fileInput = argv[4];
     std::string absolutePath = "Data/" + fileInput + ".csv";
     streamData DataStream(absolutePath);
     std::string line;
 
-    // Settings of sliding window and tde vector.
-    // dimensions/tau must match d/tau in static_fingerprintvisualization.py
-    // so the streaming and batch PCA embed the same windows for computeDelta.py.
-    int dimensions = 13;
-    int tau = 15;
-    int windowSize = 111562; // theoretisch extrem groß wählen
+    // Time-delay embedding parameters.
+    const int dimensions = std::stoi(argv[1]); // number of embedding dimensions
+    int tau = std::stoi(argv[2]);        // delay between successive embedding coordinates
+    const int windowSize = std::stoi(argv[3]); // length of the sliding window buffer
 
-    float slidingWindow[windowSize] = {0.0f};
-    float tde[dimensions] = {0.0f};
+    std::vector<float> slidingWindow(windowSize, 0.0f); // raw streaming values
+    float tde[dimensions];           // current time-delay embedding vector
+    std::fill(tde, tde + dimensions, 0.0f);
 
+    // Precompute the sliding-window offsets used to build each embedding.
     int tdeIndexes[dimensions];
     embeddingIndexes(tdeIndexes, windowSize, dimensions, tau);
 
+    // Incrementally updated statistics for streaming PCA.
     float runningMean[dimensions] = {0.0f};
     float runningCov[dimensions * dimensions] = {0.0f};
+    float runningScatter[dimensions * dimensions] = {0.0f};
 
+    // Top two principal components (eigenvectors) of the embedding.
     float principalComponent1[dimensions] = {0.0f};
     float principalComponent2[dimensions] = {0.0f};
-    
-    principalComponent1[0] = 1.0f; // Vprev starts at identity
-    principalComponent2[1] = 1.0f; // Vprev starts at identity
 
+    // Initialize the components to the identity basis vectors.
+    principalComponent1[0] = 1.0f;
+    principalComponent2[1] = 1.0f;
 
+    // Projection of the current embedding onto the two principal components.
     float outX = 0.0f;
     float outY = 0.0f;
 
@@ -76,7 +80,7 @@ int main()
         }
         float value = std::stof(line);
 
-        if (processNewDataPoint(value, tde, slidingWindow, runningMean, runningCov, principalComponent1,
+        if (processNewDataPoint(value, tde, slidingWindow.data(), runningMean, runningCov, runningScatter,principalComponent1,
                                 principalComponent2, tdeIndexes, windowSize, dimensions,
                                 &outX, &outY) != 1)
         {
@@ -84,7 +88,6 @@ int main()
             writeToFile.push_back(outY);
         }
     }
-
     std::string outputPath = "output/output.txt";
     writeData(outputPath, writeToFile, false);
     return 0;

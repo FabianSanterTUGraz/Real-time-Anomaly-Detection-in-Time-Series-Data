@@ -12,7 +12,7 @@ extern "C"
 {
 #endif
     int processNewDataPoint(float newValue, float* tde, float* slidingWindow, float* runningMean,
-                            float* runningCov, float* eigenvalues, float* eigenvectors,
+                            float* runningCov, float* runningScatter,float* eigenvalues, float* eigenvectors,
                             int* indexes, int windowSize, int dimensions,
                             float* outX, float* outY);
 
@@ -22,7 +22,7 @@ extern "C"
 
     void embeddingIndexes(int* buffer, int windowSize, int dimensions, int tau);
 
-    int PCA(float* runningMean, float* runningCov, float* tde, float* slidingWindow, int dimensions,
+    int PCA(float* runningMean, float* runningCov, float* runningScatter,float* tde, float* slidingWindow, int dimensions,
             int windowSize, float newValue, int* indexes);
 
     void updateMean(float* runningMean, int dimensions, int n, const float* newEmbedded, const float* oldEmbedded);
@@ -39,6 +39,12 @@ extern "C"
     float dotProduct(const float* v1, const float* v2, int dim);
 
     void subspaceIteration(const float* runningCov,int dimensions, float* tde1, float* tde2);
+
+    //tmp:
+    void updateCovarianceIncremental(float* runningScatter, int dimensions,
+                                  const float* deltaOld, const float* deltaNew, int sampleSize);
+
+    void scatterToCovariance(const float* scatter, float* covOut, int dimensions, int sampleSize);
 #ifdef __cplusplus
 }
 #endif

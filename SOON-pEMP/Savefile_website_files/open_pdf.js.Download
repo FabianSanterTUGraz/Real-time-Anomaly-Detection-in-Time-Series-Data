@@ -1,0 +1,224 @@
+/* Copyright 2014 Mozilla Foundation
+ * Copyright 2024 TU Wien
+ * Copyright 2026 CERN
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+"use strict";
+
+function getPageFromHash() {
+  let hash = window.location.hash || "";
+  // check if the parent window has a hash
+  if (window.parent && window.parent !== window) {
+    hash = window.parent.location.hash || "";
+  }
+  const match = hash.match(/page=(\d+)/);
+  if (match) {
+    return parseInt(match[1], 10);
+  }
+  return null;
+}
+
+function applyPageFromHash(pdfViewer, pageNumberField) {
+  if (!pdfViewer.pagesCount) return;
+  const pageFromHash = getPageFromHash();
+  if (
+    pageFromHash &&
+    pageFromHash >= 1 &&
+    pageFromHash <= pdfViewer.pagesCount
+  ) {
+    pdfViewer.currentPageNumber = pageFromHash;
+    pageNumberField.value = pageFromHash;
+  }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  const { pdfjsLib, pdfjsViewer } = window;
+
+  // The workerSrc property shall be specified
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "/static/js/pdfjs/build/pdf.worker.min.mjs";
+
+  // Some PDFs need external cmaps
+  const CMAP_URL = "/static/js/pdfjs/cmaps/";
+  const CMAP_PACKED = true;
+
+  // Some PDFs with JPEG 2000 images need the external OpenJPEG Wasm module
+  const WASM_URL = "/static/js/pdfjs/wasm/";
+
+  // Get the PDF file's URL
+  const PDF_URL = document.getElementById("pdf-file-uri").value;
+  const ENABLE_XFA = true;
+
+  // Get scripting configuration from DOM (defaults to false for security)
+  const enableScriptingElement = document.getElementById("pdf-enable-scripting");
+  const ENABLE_SCRIPTING = enableScriptingElement ? enableScriptingElement.value === "true" : false;
+  const SANDBOX_BUNDLE_SRC = "/static/js/pdfjs/build/pdf.sandbox.min.mjs";
+
+  // Get additional document init params from config (defaults to empty object)
+  const documentInitParamsElement = document.getElementById("pdf-document-init-params");
+  const DOCUMENT_INIT_PARAMS = documentInitParamsElement ? JSON.parse(documentInitParamsElement.value || '{}') : {};
+
+  const container = document.getElementById("viewerContainer");
+  const nextPageButton = document.getElementById("next");
+  const prevPageButton = document.getElementById("previous");
+  const pageNumberField = document.getElementById("pageNumber");
+  const pageNumberLabel = document.getElementById("numPages");
+  const zoomInButton = document.getElementById("zoomInButton");
+  const zoomOutButton = document.getElementById("zoomOutButton");
+  const scaleSelect = document.getElementById("scaleSelect");
+  const downloadButton = document.getElementById("downloadButton");
+
+  const eventBus = new pdfjsViewer.EventBus();
+
+  // (Optionally) enable hyperlinks within PDF files
+  const pdfLinkService = new pdfjsViewer.PDFLinkService({
+    eventBus,
+    externalLinkTarget: pdfjsViewer.LinkTarget.BLANK,
+  });
+
+  // (Optionally) enable find controller
+  const pdfFindController = new pdfjsViewer.PDFFindController({
+    eventBus,
+    linkService: pdfLinkService,
+  });
+
+  // Conditionally create scripting manager based on configuration
+  let pdfScriptingManager = null;
+  let pdfViewerOptions = {
+    container,
+    eventBus,
+    linkService: pdfLinkService,
+    findController: pdfFindController,
+  };
+
+  if (ENABLE_SCRIPTING) {
+    pdfScriptingManager = new pdfjsViewer.PDFScriptingManager({
+      eventBus,
+      sandboxBundleSrc: SANDBOX_BUNDLE_SRC,
+    });
+    pdfViewerOptions.scriptingManager = pdfScriptingManager;
+  }
+
+  const pdfViewer = new pdfjsViewer.PDFViewer(pdfViewerOptions);
+  pdfLinkService.setViewer(pdfViewer);
+
+  if (pdfScriptingManager) {
+    pdfScriptingManager.setViewer(pdfViewer);
+  }
+
+  // Register event handlers for controls
+  nextPageButton.addEventListener("click", function() {
+    pdfViewer.nextPage();
+    pageNumberField.value = pdfViewer.currentPageNumber;
+  });
+  prevPageButton.addEventListener("click", function() {
+    pdfViewer.previousPage();
+    pageNumberField.value = pdfViewer.currentPageNumber;
+  });
+  pageNumberField.addEventListener("change", function(e) {
+    let pageNumber = parseInt(e.target.value);
+    if (pageNumber > pdfViewer.pagesCount) {
+      pageNumber = pdfViewer.pagesCount;
+    } else if (pageNumber < 1) {
+      pageNumber = 1;
+    }
+    pdfViewer.currentPageNumber = pageNumber;
+    pageNumberField.value = pageNumber;
+  });
+  zoomInButton.addEventListener("click", function() {
+    pdfViewer.increaseScale();
+  });
+  zoomOutButton.addEventListener("click", function() {
+    pdfViewer.decreaseScale();
+  });
+  scaleSelect.addEventListener("change", function(e) {
+    pdfViewer.currentScaleValue = e.target.value;
+  });
+
+  downloadButton.addEventListener("click", async function() {
+    const pdfUrl = new URL(window.location.origin + PDF_URL);
+    pdfUrl.searchParams.append("download", "1");
+
+    const pathComponents = pdfUrl.pathname.split("/");
+    const filename = pathComponents[pathComponents.length - 1];
+
+    // Create and click an invisible link to trigger the download dialog
+    const a = document.createElement("a");
+    a.href = pdfUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  });
+
+  // Register event handlers on the event bus
+  eventBus.on("pagechanging", function(e) {
+    pageNumberField.value = e.pageNumber;
+  });
+  eventBus.on("scalechanging", function(e) {
+    // When the scale changes, make sure the appropriate option is selected
+    // in the dropdown UI (if no match can be found, the invalid index is fine)
+    let idx = -1;
+    for (let i = 0; i < scaleSelect.options.length; i++) {
+      const option = scaleSelect.options[i];
+
+      // `e.presetValue` has string values like "auto" or "page-fit",
+      // while `e.scale` has numeric values like 1.25
+      if (e.presetValue == option.value || e.scale == option.value) {
+        idx = i;
+        break;
+      }
+    }
+    scaleSelect.selectedIndex = idx;
+  });
+  eventBus.on("pagesinit", function () {
+    // We can use pdfViewer now, e.g. let's change default scale
+    pdfViewer.currentScaleValue = "auto";
+
+    // Display the number of pages
+    pageNumberLabel.textContent = `of ${pdfViewer.pagesCount}`;
+    applyPageFromHash(pdfViewer, pageNumberField);
+  });
+
+  window.addEventListener("hashchange", function () {
+    applyPageFromHash(pdfViewer, pageNumberField);
+  });
+  // Listen to hash changes in the parent window
+  try {
+    if (window.parent && window.parent !== window) {
+      window.parent.addEventListener("hashchange", function () {
+        applyPageFromHash(pdfViewer, pageNumberField);
+      });
+    }
+  } catch (error) {
+    // Ignore.
+  }
+
+  // Loading document
+  const loadingTask = pdfjsLib.getDocument({
+    url: PDF_URL,
+    cMapUrl: CMAP_URL,
+    cMapPacked: CMAP_PACKED,
+    wasmUrl: WASM_URL,
+    enableXfa: ENABLE_XFA,
+    ...DOCUMENT_INIT_PARAMS,
+  });
+  (async function () {
+    const pdfDocument = await loadingTask.promise;
+
+    // Document loaded, specifying document for the viewer and the (optional) linkService
+    pdfViewer.setDocument(pdfDocument);
+    pdfLinkService.setDocument(pdfDocument, null);
+  })();
+});
