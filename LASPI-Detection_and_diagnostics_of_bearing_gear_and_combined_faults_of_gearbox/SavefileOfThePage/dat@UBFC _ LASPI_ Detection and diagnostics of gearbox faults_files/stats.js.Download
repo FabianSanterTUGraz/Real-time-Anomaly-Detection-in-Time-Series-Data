@@ -1,0 +1,66 @@
+window.addEventListener('load', function () {
+	var xhr = getXMLHttpRequest();
+	var req=null;
+
+	if (document.getElementById("id_data") != undefined) {
+		const id_data = document.getElementById("id_data").textContent.trim();
+		if (id_data.match(/^[0-9]+$/) != id_data) return;
+
+		xhr.onreadystatechange = function() {
+			if ((xhr.readyState == 4) && (xhr.status == 200)) {
+				const stats_hit_key = xhr.responseText;
+				if (stats_hit_key.match(/^[0-9]+\-[0-9]+$/) != stats_hit_key) return;
+
+				const statsUpd = function(plus) {
+					var xhr = getXMLHttpRequest();
+					xhr.onreadystatechange = function() {};
+					if (plus == undefined) plus = "";
+					var req = "ajax/vuefiche.php?id="+stats_hit_key+plus;
+					//console.log(req);
+					xhr.open("GET", req, true);
+					xhr.send(null);
+				}
+
+				// Si téléchargements compte comme un accès un clic sur l'un des bouttons de téléchargement
+				var accessBtns = document.getElementsByClassName("dlBtn")
+
+				// Si pas de téléchargements sur notre site alors, compte l'accès au clic sur "Accès aux données" ou "Contact accès aux données".
+				if (accessBtns.length == 0) {
+					accessBtns = document.getElementsByClassName("accessBtn")
+				}
+
+				for (var i=accessBtns.length-1; i>=0; i--) {
+					const btn = accessBtns[i]
+					btn.addEventListener("click", function (event) {
+						statsUpd("&access=1")
+						if (btn.href) {	// Ceci permet d'ouvrir le lien avec un petit délai pour que la requête de stat ait le temps de partir.
+							console.log(btn.href)
+							setTimeout(function () {window.location = btn.href}, 200)
+							event.preventDefault()
+						}
+					})
+				}
+
+				setTimeout(statsUpd, 5500);
+				setTimeout(statsUpd, 10500);
+				setTimeout(statsUpd, 20500);
+				setTimeout(statsUpd, 60500);
+				setTimeout(statsUpd, 180500);
+				setTimeout(statsUpd, 600500);
+			}
+		};
+
+		req="ajax/vuefiche.php?doc="+id_data;
+	}
+
+	if (req) {
+		var details = [];
+		if (document.referrer) {
+			details.push('r='+encodeURIComponent(btoa(document.referrer)));
+		}
+
+		xhr.open("POST", req, true);
+		xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+		xhr.send(details.join('&'));
+	}
+});

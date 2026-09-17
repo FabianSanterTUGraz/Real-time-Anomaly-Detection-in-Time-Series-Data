@@ -1,0 +1,185 @@
+window.addEventListener('load', function () {
+	const maps = document.getElementsByClassName('spectreElectromagMap');
+
+	// Cartes d'ondes élecromagnétiques
+	for (var iMap=0; iMap<maps.length; iMap++) {
+		const mapDiv = maps[iMap];
+		const zones = JSON.parse(mapDiv.getElementsByClassName('jsonData')[0].innerText);
+		const mapDrawDiv = mapDiv.getElementsByClassName('map')[0];
+
+		var convert = function(v) {return Math.log(v) / Math.LN10; };	// Math.log10 existe sur certains navigateurs mais pas tous
+		var convert_rev = function(v) {return Math.pow(10.0,v); };
+		var s=new LineMap(mapDrawDiv, new LineMapField(convert, convert_rev), spectroItemsMakers);
+		s.initZoom(10e-16, 1e9);
+		s.setCursorFormatter(function (x) { return prefixSIVal(x, 3)+'m'; });
+		s.setZones(zones);
+		s.setupZonesHilight(mapDrawDiv.id, zones, function(s, zone) { s.zoomTo(zone.d/1.3, zone.f*1.3, 0.5); });
+		s.draw();
+	}
+
+	// Liens de conversions d'unités d'ondes élecromagnétiques
+	var list = document.getElementsByClassName("helpSpectro");
+	if (!list.empty) {
+		const CST_PLANCK = 4.135667662e-15;	// en eV⋅s
+		const LIGHT_SPEED = 299792458.0;	// en m⋅s-1
+
+		const showEMconvTr = function (titre, valeur) {
+			var tr=document.createElement("tr");
+			var td=document.createElement("td"); setText(td, titre); tr.appendChild(td);
+			var td=document.createElement("td"); setText(td, valeur); tr.appendChild(td);
+			return tr;
+		}
+
+		const showEMconvs = function (lnk, wlen) {
+			var popup = miniPopup(lnk);
+			if (!popup) return;
+
+			const fr = (getPageLang() == 'FR');
+
+			var table=document.createElement("table");
+
+			table.appendChild(showEMconvTr(fr?'Longeur d\'onde':'Wavelength',		prefixSIVal(wlen)+'m'));
+			table.appendChild(showEMconvTr(fr?'Fréquence':'Frequency',				prefixSIVal(LIGHT_SPEED/wlen)+"Hz"));
+			table.appendChild(showEMconvTr(fr?'Énergie':'Energy',					prefixSIVal(CST_PLANCK*LIGHT_SPEED/wlen)+"eV"));
+			if ((wlen < 0.001) && (wlen > 780e-9))	// Wavenumber en cm-1 (affiché uniquement pour l'IR)
+				table.appendChild(showEMconvTr(fr?'Nombre d\'onde':'Wavenumber',	(0.01/wlen).toPrecision(6)+" cm-1"));
+
+			popup.showContent('Conversions', table);
+		}
+
+		for (var id=list.length-1; id>=0; id--) {
+			const lien = list[id];
+			if (lien.dataset.spectretype == 'EM') {
+				const fncShowConv = function() {
+					showEMconvs(lien, lien.dataset.spectrewl);
+				}
+				lien.addEventListener('click', fncShowConv);
+			}
+		}
+	}
+});
+
+
+function spectroItemsMakers(linemap, shortest, longest) {
+	const fr = (getPageLang() == 'FR');
+
+	var o=[
+		{'text':'Gamma',	'd':0,		'f':10e-12, 	'y':4, 'h':20, 'fill':'#aaaaff'},
+		{'text':'X',		'd':10e-12,	'f':1e-8,		'y':4, 'h':20, 'fill':'#aaddff'},
+		{'text':'UV',		'd':10e-9,	'f':380e-9,		'y':4, 'h':20, 'fill':'#ddaaff'},
+		{'text':'Visible',	'd':380e-9,	'f':780e-9,		'y':4, 'h':20, 'fill':'#ffffaa'},
+		{'text':'IR',		'd':780e-9, 'f':1e-3,		'y':4, 'h':20, 'fill':'#ffaaaa'},
+		{'text':'Radio',	'd':1e-3,	'f':Infinity,	'y':4, 'h':20, 'fill':'#dddddd'}
+	];
+	var l;
+
+	l = linemap.visibleLength(0, 10e-12);
+	if (l) {
+		o=o.concat([
+			{'text':'γ '+(fr?'durs':'hard'), 'd':0,	'f':1e-12, 'y':24, 'h':20, 'fill':'#99f'},
+			{'text':'γ '+(fr?'mous':'soft'), 'd':1e-12,'f':10e-12, 'y':24, 'h':20, 'fill':'#bbf'}
+		]);
+	}
+
+	l = linemap.visibleLength(10e-12, 10e-9);
+	if (l) {
+		o=o.concat([
+			{'text':'X '+(fr?'durs':'hard'), 'd':10e-12,'f':1e-10, 'y':24, 'h':20, 'fill':'#9cf'},
+			{'text':'X '+(fr?'mous':'soft'), 'd':1e-10, 'f':10e-9, 'y':24, 'h':20, 'fill':'#bef'}
+		]);
+	}
+
+	l = linemap.visibleLength(10e-9, 380e-9);
+	if (l) {
+		o=o.concat([
+			{'text':'UV-A', 'd':315e-9,'f':380e-9, 'y':24, 'h':20, 'fill':'#fcf'},	// 400nm mais déborde sur visible
+			{'text':'UV-B', 'd':280e-9,'f':315e-9, 'y':24, 'h':20, 'fill':'#ebf'},
+			{'text':'UV-C', 'd':100e-9,'f':280e-9, 'y':24, 'h':20, 'fill':'#c9f'},
+			{'text':'XUV',  'd':10e-9, 'f':100e-9, 'y':24, 'h':20, 'fill':'#b8f'},
+			{'text':'H Lyman-α','d':121.6e-9,'f':121.6e-9, 'y':44, 'h':20, 'fill':'#c9f', forceText:(l > 128)},
+		]);
+	}
+
+	l = linemap.visibleLength(380e-9, 780e-9);
+	if (l) {
+		o=o.concat([
+			{'text':'Violet',		'd':380e-9,	'f':449e-9,		'y':24, 'h':20, 'fill':'#27005B'},
+			{'text':'Violet-bleu',	'd':449e-9,	'f':466e-9,		'y':24, 'h':20, 'fill':'#2A007B'},
+			{'text':'Bleu-violet',	'd':466e-9,	'f':478e-9,		'y':24, 'h':20, 'fill':'#002F83'},
+			{'text':'Bleu',			'd':478e-9,	'f':483e-9,		'y':24, 'h':20, 'fill':'#004769'},
+			{'text':'Bleu-vert',	'd':483e-9,	'f':490e-9,		'y':24, 'h':20, 'fill':'#005162'},
+			{'text':'Vert-bleu',	'd':490e-9,	'f':510e-9,		'y':24, 'h':20, 'fill':'#00725F'},
+			{'text':'Vert',			'd':510e-9,	'f':541e-9,		'y':24, 'h':20, 'fill':'#00AF6C'},
+			{'text':'Vert-jaune',	'd':541e-9,	'f':573e-9,		'y':24, 'h':20, 'fill':'#59C000'},
+			{'text':'Jaune-vert',	'd':573e-9,	'f':575e-9,		'y':24, 'h':20, 'fill':'#CAB300'},
+			{'text':'Jaune',		'd':575e-9,	'f':579e-9,		'y':24, 'h':20, 'fill':'#D2A900'},
+			{'text':'Jaune-orangé',	'd':579e-9,	'f':584e-9,		'y':24, 'h':20, 'fill':'#D79300'},
+			{'text':'Orangé-jaune',	'd':584e-9,	'f':588e-9,		'y':24, 'h':20, 'fill':'#DE8400'},
+			{'text':'Orangé',		'd':588e-9,	'f':593e-9,		'y':24, 'h':20, 'fill':'#E77700'},
+			{'text':'Orangé-rouge',	'd':593e-9,	'f':605e-9,		'y':24, 'h':20, 'fill':'#F55000'},
+			{'text':'Rouge-orangé',	'd':605e-9,	'f':622e-9,		'y':24, 'h':20, 'fill':'#EA0021'},
+			{'text':'Rouge',		'd':622e-9,	'f':700e-9,		'y':24, 'h':20, 'fill':'#7A0022'},
+			{'text':'Rouge profond','d':700e-9,	'f':780e-9,		'y':24, 'h':20, 'fill':'#440000'},
+			{'text':'Hα', 'd':656.280e-9, 'f':656.280e-9, 'y':44, 'h':20, 'fill':'#ff0000', forceText:(l > 64)},
+			{'text':'Na', 'd':589.592e-9, 'f':589.592e-9, 'y':44, 'h':20, 'fill':'#ffcc00', forceText:(l > 192)},
+			{'text':'OIII', 'd':500.7e-9, 'f':500.7e-9,   'y':44, 'h':20, 'fill':'#00ffdd', forceText:(l > 128)},
+		]);
+	};
+
+	l = linemap.visibleLength(780e-9, 1e-3);
+	if (l) {
+		o=o.concat([
+			{'text':'IR-A', 'd':780e-9,'f':1.4e-6, 'y':24, 'h':20, 'fill':'#fcc'},
+			{'text':'IR-B', 'd':1.4e-6,'f':3e-6,   'y':24, 'h':20, 'fill':'#fbb'},
+			{'text':'MWIR', 'd':3e-6,  'f':8e-6,   'y':24, 'h':20, 'fill':'#f99'},
+			{'text':'LWIR', 'd':8e-6,  'f':15e-6,  'y':24, 'h':20, 'fill':'#f88'},
+			{'text':'FIR',  'd':15e-6, 'f':1e-3,   'y':24, 'h':20, 'fill':'#f77'}
+		]);
+	}
+
+	l = linemap.visibleLength(1e-3, Infinity);
+	if (l) {
+		o=o.concat([
+			{'text':'TLF',	'd':1e8,	'f':Infinity,'y':24, 'h':20, 'fill':'#eee'},
+			{'text':'ELF',	'd':1e7,	'f':1e8,	 'y':24, 'h':20, 'fill':'#ccc'},
+			{'text':'SLF',	'd':1e6,	'f':1e7,	 'y':24, 'h':20, 'fill':'#eee'},
+			{'text':'ULF',	'd':1e5,	'f':1e6,	 'y':24, 'h':20, 'fill':'#ccc'},
+			{'text':'VLF',	'd':1e4,	'f':1e5,	 'y':24, 'h':20, 'fill':'#eee'},
+			{'text':'LF',	'd':1e3,	'f':1e4,	 'y':24, 'h':20, 'fill':'#ccc'},
+			{'text':'MF',	'd':1e2,	'f':1e3,	 'y':24, 'h':20, 'fill':'#eee'},
+			{'text':'HF',	'd':1e1,	'f':1e2,	 'y':24, 'h':20, 'fill':'#ccc'},
+			{'text':'VHF',	'd':1,		'f':1e1,	 'y':24, 'h':20, 'fill':'#eee'},
+			{'text':'UHF',	'd':1e-1,	'f':1  ,	 'y':24, 'h':20, 'fill':'#ccc'},
+			{'text':'SHF',	'd':1e-2,	'f':1e-1,	 'y':24, 'h':20, 'fill':'#eee'},
+			{'text':'EHF',	'd':1e-3,	'f':1e-2,	 'y':24, 'h':20, 'fill':'#ccc'}
+		]);
+	}
+/*
+		for (var n2=7; n2>0; n2--) {
+			for (var n1=n2+7; n1>n2; n1--) {
+				var l = -1.0 / (1.097373e+7 * (1.0 / (n1*n1) - 1.0 / (n2*n2)));// console.log(n1+" "+n2+" "+l);
+				o.push({'text':'H', 'd':l, 'f':l, 'y':44, 'h':20, 'fill':'#ff00ff'})//, forceText:true
+			}
+		}
+*/
+	l = linemap.visibleLength(364.6e-9, 673.082e-9);
+	if (l > 256) {
+		o=o.concat([
+			{'text':'Hβ', 'd':486.132e-9, 'f':486.132e-9, 'y':44, 'h':20, 'fill':'#00ffff', forceText:true},
+			{'text':'Hγ', 'd':434.046e-9, 'f':434.046e-9, 'y':44, 'h':20, 'fill':'#2A007B', forceText:true},
+			{'text':'Hδ', 'd':410.173e-9, 'f':410.173e-9, 'y':44, 'h':20, 'fill':'#27005B', forceText:true},
+			{'text':'Hε', 'd':397.007e-9, 'f':397.007e-9, 'y':44, 'h':20, 'fill':'#27005B', forceText:(l > 386)},
+			{'text':'H8', 'd':388.9e-9,   'f':388.9e-9,   'y':44, 'h':20, 'fill':'#27005B', forceText:(l > 750)},
+			{'text':'H9', 'd':383.5e-9,   'f':383.5e-9,   'y':44, 'h':20, 'fill':'#27005B', forceText:(l > 750)},
+			{'text':'H∞', 'd':364.6e-9,   'f':364.6e-9,   'y':44, 'h':20, 'fill':'#27005B', forceText:true},
+			{'text':'Na', 'd':588.995e-9, 'f':588.995e-9, 'y':44, 'h':20, 'fill':'#ffcc00', forceText:(l > 2000)}, // (2e)
+			{'text':'OIII', 'd':495.9e-9, 'f':495.9e-9,   'y':44, 'h':20, 'fill':'#00ffdd', forceText:(l > 1300)}, // (2e)
+			{'text':'NII', 'd':654.805e-9, 'f':654.805e-9,   'y':44, 'h':20, 'fill':'#ff3300', forceText:(l > 4000)},
+			{'text':'NII', 'd':658.345e-9, 'f':658.345e-9,   'y':44, 'h':20, 'fill':'#bb0000', forceText:(l > 3000)},
+			{'text':'SII', 'd':671.644e-9, 'f':671.644e-9,   'y':44, 'h':20, 'fill':'#990000', forceText:true},
+			{'text':'SII', 'd':673.082e-9, 'f':673.082e-9,   'y':44, 'h':20, 'fill':'#990000', forceText:(l > 5000)}
+		]);
+	}
+
+	return o;
+}

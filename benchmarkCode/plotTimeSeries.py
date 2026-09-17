@@ -6,8 +6,8 @@ import matplotlib.pyplot as plt
 # CONFIGURATION: Set your file path here
 # ---------------------------------------------------------
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-FILE_PATH = os.path.join(SCRIPT_DIR, "..", "code", "Data", "04 - m1_mechanically_imbalanced_half_speed.csv")
-STATIC_RESULT_PLOT_PATH = os.path.join(SCRIPT_DIR, "data", "TimeSeries.png")
+FILE_PATH = os.path.join(SCRIPT_DIR, "..", "code", "results", "04 - m1_mechanically_imbalanced_half_speed.csv")
+STATIC_RESULT_PLOT_PATH = os.path.join(SCRIPT_DIR, "results", "TimeSeries.png")
 
 
 def plot_single_column_time_series(file_path, skiprows=1, max_rows=25000):

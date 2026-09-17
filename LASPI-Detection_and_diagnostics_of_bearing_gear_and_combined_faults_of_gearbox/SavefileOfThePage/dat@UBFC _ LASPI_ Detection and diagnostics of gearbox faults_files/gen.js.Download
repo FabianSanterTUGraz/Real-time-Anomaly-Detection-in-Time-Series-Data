@@ -1,0 +1,645 @@
+function getXMLHttpRequest() {
+	var xhr;
+    try {
+		xhr = new ActiveXObject('Msxml2.XMLHTTP');
+	} catch (e) {
+        try {
+			xhr = new ActiveXObject('Microsoft.XMLHTTP');
+		} catch (e2) {
+			try {
+				xhr = new XMLHttpRequest();
+			} catch (e3) {
+				xhr = false;
+			}
+		}
+	}
+	return xhr;
+}
+
+function clearChild(node) {
+	for (var i=node.childNodes.length-1; i>=0; i--) {
+		node.removeChild(node.childNodes[i]);
+	}
+}
+
+function setText(node, text) {
+	clearChild(node);
+	node.appendChild(document.createTextNode(text));
+}
+
+function selectOption(select, valueOption) {
+	var opts=select.options;
+	for (i=opts.length-1; i>=0; i--) {
+		if (opts[i].value == valueOption) {
+			select.selectedIndex = i;
+			return opts[i];
+		}
+	}
+	return null;
+}
+
+function getRadioValue(radioList) {
+	for (i=0; i<radioList.length; i++)
+		if (radioList[i].checked)
+			return radioList[i].value;
+	return null;
+}
+
+function getGoToUrlHandler(url) {
+	return function() {
+		document.location = url;
+	}
+}
+
+function getConfirmHandler(msg) {
+	return function() {
+		return confirm(msg);
+	}
+}
+
+function evtLBtnPressed(e) {
+	if (e.buttons == undefined) {
+		return (e.which != 0);
+	} else {
+		return (e.buttons != 0);
+	}
+}
+
+function getPageLang() {
+	const lang = document.documentElement.lang.toUpperCase();
+	if (lang && /^[A-Z]{2}$/.test(lang)) {
+		return lang;
+	} else {
+		return "EN";
+	}
+}
+
+// http://forum.hardware.fr/hfr/Programmation/HTML-CSS-Javascript/javascript-connaitre-position-sujet_45951_1.htm
+function findXY(obj){
+	var x=0,y=0;
+	while (obj!=null){
+		x+=obj.offsetLeft-obj.scrollLeft;
+		y+=obj.offsetTop-obj.scrollTop;
+		obj=obj.offsetParent;
+	}
+	return {x:x,y:y};
+}
+
+function getFirstParentOfType(obj, type) {	// TODO remplacer par findParent (sachant qu'il y a un premier .parentNode dont il faudra faire attention)
+	var p = obj;
+	while (p) {
+		p = p.parentNode;
+		if (p instanceof type) {
+			return p;
+		}
+	}
+	return null;
+}
+
+// https://stackoverflow.com/questions/68278032/how-to-find-a-parent-class-from-a-child-class-and-then-find-another-child-class
+function findParent(el, selector) {
+  if (!el) return null;
+  return el.matches && el.matches(selector) ? el : findParent(el.parentNode, selector);
+}
+
+
+// Les minis popups
+
+var lastPopupClicked = null;
+
+function miniPopup(me) {
+	closeHelp();
+
+	// Si on clique sur le même lien qu'avant on ne le remet pas (donc le popup sera fermé)
+	if (lastPopupClicked == me) {
+		lastPopupClicked = undefined;
+		return false;
+	}
+	lastPopupClicked = me;
+
+	// Place à l'endroit du lien
+	var mePos = findXY(me);
+	var win = document.createElement("div");
+	win.id = "helpPopup";
+	win.style.position = "absolute";
+	win.style.left = mePos.x+"px";
+	win.classList.add("bd-callout","bd-callout-white");
+	win.style.top = (mePos.y + me.offsetHeight)+"px";
+	document.body.appendChild(win);
+	
+	win.showMessage = function(msg) {
+		setText(win, msg);
+	}
+
+	win.setWidth = function(width) {
+		win.style.width = width;
+	}
+
+	win.showContent = function(title, content) {
+		clearChild(win);
+
+		var close = document.createElement("i");
+		close.style.float = "right";
+		close.style.position = "relative"
+		close.style.right = "1em";
+		close.style.top = "1em";
+		close.classList.add("fa-solid", "fa-xmark", "fa-lg");
+		close.alt = "close help";
+		close.onclick = function () {
+			lastPopupClicked = null;
+			closeHelp();
+		};
+		win.appendChild(close);
+
+		var h1=document.createElement("h1");
+		setText(h1, title);
+		win.appendChild(h1);
+
+		if (Array.isArray(content)) {
+			for (part in content) {
+				win.appendChild(content[part]);
+			}
+		} else {
+			win.appendChild(content);
+		}
+	}
+
+	return win;
+};
+
+function closeHelp() {
+	var oldPopup = document.getElementById("helpPopup");
+	if (oldPopup) {
+		oldPopup.parentNode.removeChild(oldPopup);
+	}
+}
+
+
+
+// Les popups
+
+var closesPopups = []	// la pile des fonctions pour fermer la dernière popup affichée
+
+function openPopup(content, options) {
+	if (options == undefined) {
+		options = {}
+	}
+
+	const close_btn = document.createElement("div")
+	close_btn.classList.add("popup__close")
+
+	const body = document.createElement("div")
+	body.classList.add("popup__body")
+
+	const inner = document.createElement("div")
+	inner.classList.add("popup__inner")
+	inner.role = "dialog"
+	inner.appendChild(close_btn)
+	inner.appendChild(body)
+
+	const bg = document.createElement("div")
+	bg.classList.add("popup__bg")
+
+	const popup_root = document.createElement("div")
+	popup_root.classList.add("popup")
+	popup_root.tabIndex = -1
+	popup_root.appendChild(bg)
+	popup_root.appendChild(inner)
+
+	// Prévoit la fermeture du popup
+	const oldParentNodeContainer = content
+	const close_fnc = function () {
+		setTimeout(
+			function () {
+				if (content.parentNode) {
+					const source = body.childNodes
+					while (source.length) {
+						oldParentNodeContainer.appendChild(source[0])
+					}
+				}
+				popup_root.parentNode.removeChild(popup_root)
+			},
+			250
+		);
+		popup_root.style.opacity="0"
+		inner.style.top = "20%"
+		closesPopups.pop()
+	}
+
+	// Action qui devrait fermer la popup mais bloqué si closeOnBackgroundClick=0
+	var unsafe_close_fnc_
+	if ((options["closeOnBackgroundClick"] == undefined) || (options["closeOnBackgroundClick"] == "1")) {
+		unsafe_close_fnc_ = close_fnc
+	} else {
+		unsafe_close_fnc_ = function () {
+			// effet "veut pas se fermer".
+			inner.style.transform = "scale(0.98) rotate("+(Math.random()-0.5)+"deg)"
+			setTimeout(function () {inner.style.transform = null }, 250);
+		}
+	}
+	const unsafe_close_fnc = unsafe_close_fnc_
+
+	bg.addEventListener("click", unsafe_close_fnc)
+	popup_root.addEventListener("keydown", function (e) { if(e.code == "Escape") unsafe_close_fnc() })
+	close_btn.addEventListener("click", close_fnc)
+	closesPopups.push(close_fnc)
+
+	// si content objet DOM => déplace le contenu pour le mettre dans la fenètre de popup et on va ranger cet élement du dom à la fermeture.
+	const source = content.childNodes
+	while (source.length) {
+		body.appendChild(source[0])
+	}
+
+	if (options["onOpen"] != undefined) {
+		options["onOpen"](body)
+	}
+
+	document.body.appendChild(popup_root)
+
+	list = document.getElementsByClassName("closePopup");
+	for (var id=list.length-1; id>=0; id--) {
+		list[id].addEventListener("click", close_fnc)
+	}
+
+	popup_root.style.visibility="visible"
+	popup_root.focus()		// Nécessaire pour que "keydown" soit possible alors que l'on a pas cliqué où que ce soit sur la popup
+
+	// Largeur éventuelle de la popup
+	var largeur = -1
+	for (var id=body.childNodes.length-1; id>=0; id--) {
+		if (body.childNodes[id].style && body.childNodes[id].style.width) {
+			largeur = Math.max(largeur, body.childNodes[id].offsetWidth)
+		}
+	}
+	if (largeur > 0) {
+		inner.style.width = "calc("+(largeur + 3)+"px + 4em)"	// le +3 est permet d'esquiver les soucis d'arrondi
+	}
+
+	inner.style.minWidth = "min(96%, "+content.style.minWidth+")"
+
+	const setHeight = function () {
+		// Hauteur de la popup
+		const optimal = "calc("+(body.offsetHeight + body.offsetTop + 3)+"px + 2em)"	// le +3 est permet d'esquiver les soucis d'arrondi
+		var mini = "10%"
+		if (options["minHeight"] != undefined) {
+			mini = options["minHeight"]
+		}
+		const maxi = "96%"
+		inner.style.maxHeight = "max("+mini+", min("+optimal+", "+maxi+"))"	// + compatible que clamp()
+	}
+	setHeight()
+
+	setTimeout(
+		function () {
+			inner.style.top = "0"
+			popup_root.style.opacity="1"
+			setHeight()
+		},
+		0
+	);
+}
+
+function closePopup() {
+	if (closesPopups.length) {
+		(closesPopups[closesPopups.length - 1])()
+	}
+}
+
+
+
+// Bouton de copie dans le presse papier
+function setBtnCopie(btn, a_copier) {
+	btn.addEventListener('click', function () {
+		navigator.clipboard.writeText(a_copier.innerText.trim());
+		const msgCopie = document.createElement("div")
+		msgCopie.classList.add("copie")
+		setText(msgCopie, "Copié")
+		a_copier.appendChild(msgCopie)
+		setTimeout(
+			function () {
+				a_copier.removeChild(msgCopie)
+			},
+			500
+		);
+	});
+}
+
+
+
+// Formattage
+
+function prefixSIVal(value, chiffresSignifs) {
+	const MULTIPLES_SYMBOLES = ['y', 'z', 'a', 'f', 'p', 'n', 'µ', 'm', '', 'k', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y'];
+	const ID_MULTIPLE_DE_BASE = 8;
+
+	var expon = (value != 0) ? (Math.floor((Math.log(Math.abs(value)) / Math.LN10)/3)*3) : 0;
+	if (expon > 24) expon = 24;
+	if (expon < -24) expon = -24;
+
+	var val = Math.abs(value) / Math.pow(10, expon);
+
+	var sign = (value < 0)?'-':'';
+	if (isFinite(val)) {
+		var expId = (expon / 3) + ID_MULTIPLE_DE_BASE;
+		if (chiffresSignifs == undefined) chiffresSignifs=6;
+		return sign+val.toPrecision(chiffresSignifs)+' '+MULTIPLES_SYMBOLES[expId];
+	} else {
+		return sign+'∞';
+	}
+}
+
+
+// Math
+
+function fmod(a, b) {
+	var x = Math.floor(a/b);
+	return a-b*x;
+}
+
+function isdigit(text) {
+	return /^\d+$/.test(text)
+}
+
+
+// interactions Javascripts
+
+window.addEventListener('load', function() {
+	var list;
+
+
+	// hideableZone
+
+	list = document.getElementsByClassName("hideableZone");
+	for (var id=list.length-1; id>=0; id--) {
+		const zone = list[id];
+		if (zone.classList.contains("defaultHided")) {
+			zone.style.display = "none";
+		}
+
+		const img = document.createElement("img");
+		img.style.verticalAlign="middle";
+		img.style.marginRight=".2em";
+
+		const redrawZone = function() {
+			const closeimage =
+				'<?xml version="1.0" encoding="UTF-8" standalone="no"?>'+"\n"+
+				'<svg xmlns="http://www.w3.org/2000/svg" width="15" height="8" viewBox="0 0 15 8">'+
+				'<path d="'+(
+					(zone.style.display == "none")?
+					"m 0,0 h 15 l -7.5,7.5 z":
+					"m 0,7.5 h 15 l -7.5,-7.5 z"
+				)+'" fill="#000" />'+
+				'</svg>';
+			img.src = 'data:image/svg+xml;base64,'+btoa(closeimage);
+		};
+
+		const changeZone = function() {
+			zone.style.display = (zone.style.display == "none") ? "block" : "none";
+			redrawZone();
+		};
+
+		const title = document.getElementById(zone.id+"_title");
+		title.style.cursor = "pointer";
+		title.addEventListener('click', changeZone);
+		redrawZone();
+
+		title.insertBefore(img, title.firstChild);
+	}
+
+	// Menu
+	list = document.getElementsByClassName("sousMenu");
+	for (var id=list.length-1; id>=0; id--) {
+		const sousMenu = list[id]
+		const btn = sousMenu.querySelector('[aria-controls]')
+		if (sousMenu && btn) {
+			const ul = document.getElementById(btn.getAttribute("aria-controls"))
+			if (ul) {
+				const ul_height = ul.offsetHeight
+				if (ul_height) {
+					btn.addEventListener('click', function () {
+						if (sousMenu.classList.contains("reduit")) {
+							ul.style.height = ul_height+"px"
+							sousMenu.classList.remove("reduit")
+							btn.setAttribute("aria-expanded", "true")
+						} else {
+							ul.style.height = "0"
+							sousMenu.classList.add("reduit")
+							btn.setAttribute("aria-expanded", "false")
+						}
+					})
+					ul.style.height = ul_height+"px"
+					if (sousMenu.classList.contains("reduit")) {
+						ul.style.height = "0"
+					}
+				}
+			}
+		}
+	}
+
+	// Menu du haut
+	menuHaut = document.getElementById("haut")
+	menuOpenBtn = document.getElementById("menuOpenBtn")
+	if (menuHaut && menuOpenBtn) {
+		menuOpenBtn.addEventListener('click', function () {
+			menuHaut.classList.toggle("open")
+			const icon = menuOpenBtn.getElementsByTagName("i")[0]
+			if (icon) {
+				if (menuHaut.classList.contains("open")) {
+					icon.className = "fas fa-close"
+				} else {
+					icon.className = "fas fa-bars"
+				}
+			}
+		})
+	}
+
+	// onChangeSubmit
+	list = document.getElementsByClassName("onChangeSubmit");
+	for (var id=list.length-1; id>=0; id--) {
+		const form = list[id].form;
+		const callback = function() {
+			form.submit();
+		};
+		list[id].addEventListener('change', callback);
+	}
+
+
+	// onClickSubmit
+
+	const getFncOnClickSubmit = function(button) {
+		return function() {
+			const form = (button instanceof HTMLFormElement)?button:getFirstParentOfType(button, HTMLFormElement);
+			const cMsg = button.dataset.confirm;
+			if (form) {
+				var ok = true;
+				if (cMsg) {
+					ok = confirm(cMsg.replace('\\n', '\n'));
+				}
+				if (ok) {
+					if (button instanceof HTMLInputElement && button.type == "button") {
+						button.type = "hidden";
+					} else if (button instanceof HTMLButtonElement) {
+						button.type = "submit";
+					}
+					if (!(button instanceof HTMLButtonElement)) {
+						form.submit();
+					}
+				}
+			}
+		};
+	};
+
+	list = document.getElementsByClassName("onClickSubmit");
+	for (var id=list.length-1; id>=0; id--) {
+		list[id].addEventListener('click', getFncOnClickSubmit(list[id]));
+	}
+
+
+	// btnToUrl
+
+	list = document.getElementsByClassName("btnToUrl");
+	for (var id=list.length-1; id>=0; id--) {
+		const url = list[id].dataset.href;
+		if (url) {
+			const callback = function() {
+				document.location = url;
+			};
+			list[id].addEventListener('click', callback);
+		}
+	}
+
+
+	// noteTo
+	list = document.getElementsByClassName("noteTo");
+	for (var id=list.length-1; id>=0; id--) {
+		const to = document.getElementById(list[id].dataset.noteTo);
+		var keepOn = null;
+		if (to) {
+			list[id].addEventListener('mouseenter', function () { if (!keepOn) to.classList.add("noteSurvol"); } );
+			list[id].addEventListener('mouseleave', function () { if (!keepOn) to.classList.remove("noteSurvol"); } );
+			list[id].addEventListener('click', function () {
+				if (keepOn == to) {
+					keepOn = null;
+				} else {
+					if (keepOn) {
+						keepOn.classList.remove("noteSurvol");
+					}
+					to.classList.add("noteSurvol");
+					keepOn = to;
+				}
+			} );
+		}
+	}
+
+	// DeplacementRapide
+	let slider = document.getElementsByClassName("deplacementRapide");
+	if(slider !== undefined) {
+		slideColorDeplacementRapide(slider);
+	}
+
+	// onClickPrint
+	list = document.getElementsByClassName("onClickPrint");
+	for (var id=list.length-1; id>=0; id--) {
+		list[id].addEventListener('click', function () { window.print(); });
+	}
+
+	// Mini boite de recherche
+	const rechercheCollapseZone = document.getElementById("rechercheCollapseZone")
+	if (rechercheCollapseZone) {
+		const rechercheCollapseBtn = rechercheCollapseZone.getElementsByTagName("a")[0]
+		const rechercheCollapseForm = document.getElementById("rechercheCollapse")
+		if (rechercheCollapseBtn && rechercheCollapseForm) {
+			const linkTo = rechercheCollapseBtn.getAttribute("href")
+			rechercheCollapseBtn.removeAttribute("href")
+			rechercheCollapseBtn.addEventListener("click", function () {
+				// Si look PC : mini boite de recherche sinon va vers le lien
+				if (window.innerWidth >= 1200) {
+					rechercheCollapseForm.classList.toggle("reduit")
+					const ae = !(rechercheCollapseForm.classList.contains("reduit"))
+					rechercheCollapseBtn.setAttribute("aria-expanded", ae.toString())
+				} else {
+					window.location = linkTo
+				}
+			})
+		}
+	}
+
+	// Les dropdown
+	var list1 = document.getElementsByClassName("dropdown-toggle")
+	var list2 = document.getElementsByClassName("dropdown-toggle-discret")	// (la version "-discret" est juste sans le "v")
+	var last_dropdown_opened = null;
+
+	list = []
+	for (var id=list1.length-1; id>=0; id--) { list.push(list1[id]) }
+	for (var id=list2.length-1; id>=0; id--) { list.push(list2[id]) }
+	const allDrops = list.filter((btn) => {
+		const objId = btn.dataset.dropdownId
+		return objId && document.getElementById(objId)
+	} )
+
+	document.addEventListener("click", function(evt) {
+		btn_opened = null
+
+		// On clique sur un boutton ?
+		var btn = findParent(evt.target, ".dropdown-toggle")
+		if (!btn) {
+			btn = findParent(evt.target, ".dropdown-toggle-discret")
+		}
+		if (btn) {
+			const objId = btn.dataset.dropdownId
+			const obj = document.getElementById(objId)
+			if (btn.getAttribute("aria-expanded") != "true") {
+				obj.classList.add("show")
+				btn.classList.add("show")
+				btn.setAttribute("aria-expanded", "true")
+				btn_opened = btn
+			}
+		}
+
+		// Ferme tous les drops down, mis à part celui que l'on vient d'ouvrir
+		for (var i=allDrops.length-1; i>=0; i--) {
+			const btn = allDrops[i]
+			if (btn != btn_opened) {
+				btn.classList.remove("show")
+				document.getElementById(btn.dataset.dropdownId).classList.remove("show")
+				btn.setAttribute("aria-expanded", "false")
+			}
+		}
+	});
+
+	// Les popups ayant pour source un élement du DOM
+	// TODO gérer progressivement les requètes simples avec ceci.
+	const popup = document.getElementsByClassName("popup")[0]
+	list = document.getElementsByClassName("openPopup")
+	var popupPrecedantObj = null
+	for (var id=list.length-1; id>=0; id--) {
+		const objId = list[id].dataset.popupObject
+
+		var options_ = {}
+		if (list[id].dataset.popupCloseOnBackgroundClick != undefined) {
+			options_["closeOnBackgroundClick"] = list[id].dataset.popupCloseOnBackgroundClick
+		}
+		const options = options_
+
+		list[id].addEventListener('click', function () {
+			openPopup(document.getElementById(objId), options)
+		});
+	}
+});
+
+// Gérer le bloc de deplacement rapide
+function slideColorDeplacementRapide(slider) {
+	if(slider[0] != undefined) {
+		let li_slider = slider[0].getElementsByTagName("li");
+		for (let li_s = 0; li_s < li_slider.length; li_s++) {
+			li_slider[li_s].addEventListener("click", ()=> {
+				li_slider[li_s].style.borderLeft = "3px solid var(--custom-alert-red-color)";
+				for(let j=0; j<li_slider.length; j++) {
+					if(j !== li_s) {
+						li_slider[j].style.borderLeft = "1px solid var(--custom-secondary-color)";
+					}
+				}
+			}, false)
+		}
+	}
+}
