@@ -10,7 +10,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_DIR = os.path.join(SCRIPT_DIR, "output")
 OUTPUT_PATH = os.path.join(OUTPUT_DIR, "output.txt")
 
-LASPI_DATA_PATH = r"C:\Users\Abuscom\Desktop\Real-time-Anomaly-Detection-in-Time-Series-Data\LASPI-Detection_and_diagnostics_of_bearing_gear_and_combined_faults_of_gearbox\Bearing_inner_race_fault\35hz_0%_2091rpm\acc_00001.csv"
+LASPI_DATA_PATH = r"C:\Users\Abuscom\Desktop\Real-time-Anomaly-Detection-in-Time-Series-Data\LASPI-Detection_and_diagnostics_of_bearing_gear_and_combined_faults_of_gearbox\Healthy_motor\35hz_0%_2090rpm\acc_00001.csv"
 DATA_PATH = os.path.join(SCRIPT_DIR, "Data", "acc_00001.csv")
 
 FAULT_TYPE_NAME = os.path.basename(os.path.dirname(os.path.dirname(LASPI_DATA_PATH)))
