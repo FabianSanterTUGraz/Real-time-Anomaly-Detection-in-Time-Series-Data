@@ -1,4 +1,4 @@
-#Wichtig wenn d zu groß ist dann im c++ file ein buffer overflow
+# Wichtig: Wenn d zu groß ist, entsteht im C++-File ein Stack Overflow (Buffer Overflow)
 
 import os
 import shutil
@@ -17,7 +17,7 @@ OUTPUT_PATH = os.path.join(OUTPUT_DIR, "output.txt")
 LASPI_DATA_PATH = r"C:\Users\39320\workspace\Real-time-Anomaly-Detection-in-Time-Series-Data\LASPI-Detection_and_diagnostics_of_bearing_gear_and_combined_faults_of_gearbox\Healthy_motor\25hz_0%_1490rpm\acc_00001.csv"
 DATA_PATH = os.path.join(SCRIPT_DIR, "Data", "input.csv")
 
-RESULTS_DIR = os.path.join(SCRIPT_DIR, "..", "benchmarkCode", "results")
+RESULTS_DIR = os.path.join(SCRIPT_DIR, "..", "results")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 os.makedirs(RESULTS_DIR, exist_ok=True)
@@ -38,7 +38,7 @@ def plot_output(png_path, title):
 
     plt.tight_layout()
     plt.savefig(png_path)
-    plt.show()
+    # plt.show() entfernt, damit die Schleife nicht nach jedem Bild pausiert
     plt.close(fig)
 
 
@@ -46,7 +46,7 @@ tau = 1
 
 root_path = Path(LASPI_DATA_PATH).parents[2]
 
-for csv_file in root_path.glob("**/*.csv"):
+for csv_file in root_path.glob("**/acc_00001.csv"):
     if csv_file.name.startswith("._"):
         continue
 
@@ -55,10 +55,20 @@ for csv_file in root_path.glob("**/*.csv"):
     fileName = csv_file.stem
 
     shutil.copyfile(csv_file, DATA_PATH)
-    for d in [12,25,35]:
+
+    target_dir = os.path.join(RESULTS_DIR, fault_type_name, condition_name)
+    os.makedirs(target_dir, exist_ok=True)
+
+    for d in [12, 25, 35]:
         for windowSize in [8000]:
-            subprocess.run(["./anomaly_detection.exe", str(d), str(tau), str(windowSize), str("input")])
-            png_path = os.path.join(RESULTS_DIR,
-                                    f"dynamic_{fault_type_name}_{condition_name}_{fileName}_tau_{tau}_w_{windowSize}_d{d}.png")
+            subprocess.run(
+                ["./anomaly_detection.exe", str(d), str(tau), str(windowSize), "input"],
+                check=True
+            )
+
+            png_path = os.path.join(
+                target_dir,
+                f"dynamic_{fileName}_tau_{tau}_w_{windowSize}_d{d}.png"
+            )
             plot_title = f"{fault_type_name}\n{condition_name}\nw = {windowSize} | d = {d} | tau = {tau}"
             plot_output(png_path, plot_title)
