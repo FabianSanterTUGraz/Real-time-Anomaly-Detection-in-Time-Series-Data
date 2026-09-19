@@ -1,6 +1,5 @@
 import os
 import subprocess
-import glob
 
 import numpy as np
 import pandas as pd
@@ -11,11 +10,20 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_DIR = os.path.join(SCRIPT_DIR, "output")
 OUTPUT_PATH = os.path.join(OUTPUT_DIR, "output.txt")
 
-BASE_DIR = r"C:\Users\39320\workspace\Real-time-Anomaly-Detection-in-Time-Series-Data\LASPI-Detection_and_diagnostics_of_bearing_gear_and_combined_faults_of_gearbox"
-RESULTS_DIR = os.path.join(SCRIPT_DIR, "..", "results")
+LASPI_DATA_PATH = r"C:\Users\Abuscom\Desktop\Real-time-Anomaly-Detection-in-Time-Series-Data\LASPI-Detection_and_diagnostics_of_bearing_gear_and_combined_faults_of_gearbox\Healthy_motor\35hz_0%_2090rpm\acc_00001.csv"
+DATA_PATH = os.path.join(SCRIPT_DIR, "Data", "acc_00001.csv")
+
+FAULT_TYPE_NAME = os.path.basename(os.path.dirname(os.path.dirname(LASPI_DATA_PATH)))
+CONDITION_NAME = os.path.basename(os.path.dirname(LASPI_DATA_PATH))
+RESULTS_DIR = os.path.join(SCRIPT_DIR, "..", "benchmarkCode", "results")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 os.makedirs(RESULTS_DIR, exist_ok=True)
+os.makedirs(os.path.dirname(DATA_PATH), exist_ok=True)
+
+df = pd.read_csv(LASPI_DATA_PATH, header=None)
+values = df[0]
+values.to_csv(DATA_PATH, header=False, index=False)
 
 
 def plot_output(png_path, title):
@@ -35,30 +43,15 @@ def plot_output(png_path, title):
     plt.show()
     plt.close(fig)
 
+DATASETS = {
+    "Dataset01":"acc_00001",
+}
 
 d = 13
 
-for laspi_path in glob.glob(os.path.join(BASE_DIR, "**", "*.csv"), recursive=True):
-    if "__MACOSX" in laspi_path:
-        continue
-
-    fileName = os.path.splitext(os.path.basename(laspi_path))[0]
-
-    DATA_PATH = os.path.join(SCRIPT_DIR, "Data", os.path.basename(laspi_path))
-    os.makedirs(os.path.dirname(DATA_PATH), exist_ok=True)
-
-    df = pd.read_csv(laspi_path, header=None)
-    values = df[0]
-    values.to_csv(DATA_PATH, header=False, index=False)
-
-    # Spiegelung der Ordnerstruktur im results-Verzeichnis[cite: 2]
-    rel_dir = os.path.dirname(os.path.relpath(laspi_path, BASE_DIR))
-    current_results_dir = os.path.join(RESULTS_DIR, rel_dir)
-    os.makedirs(current_results_dir, exist_ok=True)
-
-    for tau in [1]:
-        for windowSize in [8000]:
-
+for tau in [25,35]:
+    for windowSize in [8000]:
+        for label, fileName in DATASETS.items():
             subprocess.run(["./anomaly_detection.exe", str(d), str(tau), str(windowSize), str(fileName)])
-            png_path = os.path.join(current_results_dir, f"dynamic_{fileName}_tau_{tau}_w_{windowSize}_d{d}.png")
+            png_path = os.path.join(RESULTS_DIR, f"dynamic_{FAULT_TYPE_NAME}_{CONDITION_NAME}_tau_{tau}_w_{windowSize}_d{d}.png")
             plot_output(png_path, f"w = {windowSize} d = {d} tau = {tau}")
