@@ -1,77 +1,89 @@
-import os
-import subprocess
+import os, subprocess
 from pathlib import Path
-
 import numpy as np
 import pandas as pd
-from matplotlib.pyplot import colormaps
 import matplotlib.pyplot as plt
+from matplotlib import gridspec
+from matplotlib.pyplot import colormaps
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-OUTPUT_PATH = os.path.join(SCRIPT_DIR, "output", "output.txt")
-DATA_PATH = os.path.join(SCRIPT_DIR, "Data", "input.csv")
-DATASET_ROOT = os.path.join(SCRIPT_DIR, "..",
-                            "ieee-phm-2012-data-challenge-dataset",
-                            "Full_Test_Set")
-RESULTS_DIR = os.path.join(SCRIPT_DIR, "..", "results")
+d = 100
+tau = 1
+window_size = 2560
+ACC_COL =  4
+N_PER_BLOCK = 5   # Dateien am Anfang / am Ende
 
-os.makedirs(os.path.dirname(DATA_PATH), exist_ok=True)
-os.makedirs(RESULTS_DIR, exist_ok=True)
-
-
-def load_accel(f):
-    df = pd.read_csv(f, header=None)
-    return df.iloc[:, 4 if df.shape[1] >= 6 else 0].to_numpy()
+BASE = os.path.dirname(os.path.abspath(__file__))
+EXE = os.path.join(BASE, "anomaly_detection.exe")
+INPUT = os.path.join(BASE, "Data", "input.csv")
+OUTPUT = os.path.join(BASE, "output", "output.txt")
+DATASET = os.path.join(BASE, "..", "ieee-phm-2012-data-challenge-dataset", "Full_Test_Set")
+RESULTS = os.path.join(BASE, "..", "results")
+os.makedirs(RESULTS, exist_ok=True)
 
 
-def plot_output(png_path, title, fingerprints, n_cols=10):
-    fig, axes = plt.subplots(1, n_cols, figsize=(2.5 * n_cols, 3.0))
-    axes = np.atleast_1d(axes).flatten()
-    for i, (idx, seg) in enumerate(fingerprints):
+def fingerprint(acc_file):
+    """Eine acc-Datei -> ein C++-Lauf -> Fingerprint (L, 2) oder None."""
+    df = pd.read_csv(acc_file, header=None, sep=None, engine="python")
+    df[ACC_COL].to_csv(INPUT, index=False, header=False)
+    subprocess.run([EXE, str(d), str(tau), str(window_size), "input"],
+                   cwd=BASE, check=True, stdout=subprocess.DEVNULL)
+    block = open(OUTPUT).read().split("---")[0].strip()
+    return np.loadtxt(block.splitlines(), delimiter=",") if block else None
+
+
+def plot_blocks(png_path, title, block1, block2, block1_title, block2_title):
+    n1, n2 = len(block1), len(block2)
+    fig = plt.figure(figsize=(2.5 * (n1 + n2 + 1), 3.3))
+    gs = gridspec.GridSpec(2, n1 + 1 + n2, height_ratios=[1, 12], hspace=0.05, wspace=0.05)
+
+    ax = fig.add_subplot(gs[0, :n1]); ax.axis('off')
+    ax.set_title(block1_title, fontsize=11, color='#2a7a2a')
+    ax = fig.add_subplot(gs[0, n1 + 1:]); ax.axis('off')
+    ax.set_title(block2_title, fontsize=11, color='#a02020')
+
+    def draw(ax, label, seg):
         r = np.linalg.norm(seg - seg.mean(0), axis=1)
         rn = (r - r.min()) / (r.max() - r.min() + 1e-12)
-        axes[i].scatter(seg[:, 0], seg[:, 1], s=2,
-                        c=colormaps["turbo"](rn), alpha=0.7)
-        axes[i].set_aspect('equal')
-        axes[i].axis('off')
-        axes[i].set_title(f"#{idx}", fontsize=8)
-    for j in range(len(fingerprints), len(axes)):
-        axes[j].axis('off')
-    fig.suptitle(title, fontsize=13)
-    plt.tight_layout()
-    plt.savefig(png_path, dpi=100)
+        ax.scatter(seg[:, 0], seg[:, 1], s=2, c=colormaps["turbo"](rn), alpha=0.7)
+        ax.set_aspect('equal'); ax.axis('off'); ax.set_title(label, fontsize=7)
+
+    for i, (label, seg) in enumerate(block1):
+        draw(fig.add_subplot(gs[1, i]), label, seg)
+    for i, (label, seg) in enumerate(block2):
+        draw(fig.add_subplot(gs[1, n1 + 1 + i]), label, seg)
+
+    ax = fig.add_subplot(gs[1, n1]); ax.axis('off')
+    ax.text(0.5, 0.5, "⟿", ha='center', va='center', fontsize=48,
+            color='#444444', transform=ax.transAxes)
+
+    fig.suptitle(title, fontsize=13, y=0.98)
+    plt.savefig(png_path, dpi=150, bbox_inches='tight')
     plt.show()
     plt.close(fig)
 
 
-for bearing_dir in sorted(Path(DATASET_ROOT).iterdir()):
-    if not bearing_dir.is_dir():
+for bearing in sorted(Path(DATASET).iterdir()):
+    files = sorted(bearing.glob("acc_*.csv")) if bearing.is_dir() else []
+    if len(files) < 2 * N_PER_BLOCK:
         continue
-    bearing_name = bearing_dir.name
-    csv_files = sorted([f for f in bearing_dir.iterdir()
-                        if f.name.startswith("acc_") and f.name.endswith(".csv")])
-    if not csv_files:
+    first = list(range(N_PER_BLOCK))
+    last = list(range(len(files) - N_PER_BLOCK, len(files)))
+
+    blocks = []
+    for idxs in (first, last):
+        b = []
+        for i in idxs:
+            fp = fingerprint(files[i])
+            if fp is None:
+                print("kein Fingerprint:", bearing.name, files[i].name)
+            else:
+                b.append((f"#{i}", fp))
+        blocks.append(b)
+    if not blocks[0] or not blocks[1]:
         continue
 
-    target_dir = os.path.join(RESULTS_DIR, bearing_name)
-    os.makedirs(target_dir, exist_ok=True)
-
-    for d in [300]:
-        n_files = len(csv_files)
-        n_views = min(10, n_files)
-        indices = (np.array([0]) if n_views == 1 else
-                   np.unique(np.linspace(0, n_files - 1, n_views).round().astype(int)))
-        indices[0], indices[-1] = 0, n_files - 1
-
-        fingerprints = []
-        for file_idx in indices:
-            sig = load_accel(csv_files[file_idx])
-            pd.Series(sig).to_csv(DATA_PATH, index=False, header=False)
-            subprocess.run(["./anomaly_detection.exe", str(d), "1", "2560", "combined_output"],
-                           check=True, cwd=SCRIPT_DIR)
-            df = pd.read_csv(OUTPUT_PATH, header=None, sep=',', names=['X', 'Y'])
-            fingerprints.append((file_idx, df[['X', 'Y']].to_numpy()))
-            print(f"[{bearing_name}] {csv_files[file_idx].name}")
-
-        plot_output(os.path.join(target_dir, f"dynamic_{bearing_name}_d{d}.png"),
-                    f"{bearing_name} | d = {d}", fingerprints)
+    plot_blocks(os.path.join(RESULTS, f"{bearing.name}.png"),
+                f"{bearing.name} | d = {d} | tau = {tau}",
+                blocks[0], blocks[1],
+                f"Anfang (Dateien #{first[0]} – #{first[-1]})",
+                f"Ende (Dateien #{last[0]} – #{last[-1]})")
