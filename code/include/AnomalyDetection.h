@@ -10,40 +10,40 @@
 extern "C"
 {
 #endif
-    int processNewDataPoint(float newValue, float* tde, float* slidingWindow, float* runningMean,
-                            float* runningCov, float* runningScatter,float* eigenvalues, float* eigenvectors,
+    int processNewDataPoint(double newValue, double* tde, double* slidingWindow, double* runningMean,
+                            double* runningCov, double* runningScatter,double* eigenvalues, double* eigenvectors,
                             int* indexes, int windowSize, int dimensions,
-                            float* outX, float* outY);
+                            double* outX, double* outY);
 
-    void slideWindow(float* slidingWindow, int size, float value);
+    void slideWindow(double* slidingWindow, int size, double value);
 
-    void embedding(float* buffer, float* slidingWindow, int size, int* indexes);
+    void embedding(double* buffer, double* slidingWindow, int size, int* indexes);
 
     void embeddingIndexes(int* buffer, int windowSize, int dimensions, int tau);
 
-    int PCA(float* runningMean, float* runningCov, float* runningScatter,float* tde, float* slidingWindow, int dimensions,
-            int windowSize, float newValue, int* indexes);
+    int PCA(double* runningMean, double* runningCov, double* runningScatter,double* tde, double* slidingWindow, int dimensions,
+            int windowSize, double newValue, int* indexes);
 
-    void updateMean(float* runningMean, int dimensions, int n, const float* newEmbedded, const float* oldEmbedded);
+    void updateMean(double* runningMean, int dimensions, int n, const double* newEmbedded, const double* oldEmbedded);
 
-    void centerData(float* runningMean, float* tdeIn, float* tdeOut, int dimensions);
+    void centerData(double* runningMean, double* tdeIn, double* tdeOut, int dimensions);
 
-    void copyArray(float* inputArray, float* outputArray, int dimensions);
+    void copyArray(double* inputArray, double* outputArray, int dimensions);
 
     int indexAccessHelper(int row, int column, int dimensions);
 
-    void updateCovariance(float* runningCov, int dimensions, const float* newCentered,
-                      const float* oldCentered, int n);
+    void updateCovariance(double* runningCov, int dimensions, const double* newCentered,
+                      const double* oldCentered, int n);
 
-    float dotProduct(const float* v1, const float* v2, int dim);
+    double dotProduct(const double* v1, const double* v2, int dim);
 
-    void subspaceIteration(const float* runningCov,int dimensions, float* tde1, float* tde2);
+    void subspaceIteration(const double* runningCov,int dimensions, double* tde1, double* tde2);
 
     //tmp:
-    void updateCovarianceIncremental(float* runningScatter, int dimensions,
-                                  const float* deltaOld, const float* deltaNew, int sampleSize);
+    void updateCovarianceIncremental(double* runningScatter, int dimensions,
+                                  const double* deltaOld, const double* deltaNew, int sampleSize);
 
-    void scatterToCovariance(const float* scatter, float* covOut, int dimensions, int sampleSize);
+    void scatterToCovariance(const double* scatter, double* covOut, int dimensions, int sampleSize);
 #ifdef __cplusplus
 }
 #endif

@@ -2,6 +2,8 @@
 #include <fstream>
 #include <iostream>
 #include <vector>
+#include <cstdlib>
+
 
 #include "include/streamingData.hpp"
 #include "include/AnomalyDetection.h"
@@ -55,9 +57,10 @@ int main(int argc, char* argv[])
     embeddingIndexes(tdeIndexes, windowSize, dimensions, tau);
 
     // Incrementally updated statistics for streaming PCA.
-    double runningMean[dimensions] = {0.0f};
-    double runningCov[dimensions * dimensions] = {0.0f};
-    double runningScatter[dimensions * dimensions] = {0.0f};
+    double* runningMean    = (double*)calloc((size_t)dimensions, sizeof(double));
+    double* runningCov     = (double*)calloc((size_t)dimensions * (size_t)dimensions, sizeof(double));
+    double* runningScatter = (double*)calloc((size_t)dimensions * (size_t)dimensions, sizeof(double));
+
 
     // Top two principal components (eigenvectors) of the embedding.
     double principalComponent1[dimensions] = {0.0f};
@@ -78,7 +81,7 @@ int main(int argc, char* argv[])
         {
             break;
         }
-        float value = std::stof(line);
+        double value = std::stof(line);
 
         if (processNewDataPoint(value, tde, slidingWindow.data(), runningMean, runningCov, runningScatter,principalComponent1,
                                 principalComponent2, tdeIndexes, windowSize, dimensions,
@@ -90,5 +93,9 @@ int main(int argc, char* argv[])
     }
     std::string outputPath = "output/output.txt";
     writeData(outputPath, writeToFile, false);
+
+    free(runningMean);
+    free(runningCov);
+    free(runningScatter);
     return 0;
 }
