@@ -13,14 +13,12 @@ from matplotlib import pyplot as plt
 from sklearn.decomposition import PCA
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-LASPI_DATA_PATH = r"C:\Users\Abuscom\Desktop\Real-time-Anomaly-Detection-in-Time-Series-Data\LASPI-Detection_and_diagnostics_of_bearing_gear_and_combined_faults_of_gearbox\Healthy_motor\45hz_0%_2691rpm\acc_00001.csv"
-#LASPI_DATA_PATH = r"C:\Users\Abuscom\Desktop\Real-time-Anomaly-Detection-in-Time-Series-Data\LASPI-Detection_and_diagnostics_of_bearing_gear_and_combined_faults_of_gearbox\Gear_half_broken_tooth\35hz_50%_2084rpm\acc_00001.csv"
-FAULT_TYPE_NAME = os.path.basename(os.path.dirname(os.path.dirname(LASPI_DATA_PATH)))
-CONDITION_NAME = os.path.basename(os.path.dirname(LASPI_DATA_PATH))
+IMS_DIR = os.path.join(SCRIPT_DIR, "..", "IMS", "2nd_test", "2nd_test")
+IMS_COLUMN = 0  # Bearing 3 (inner race defect), Ch 5 = 0-indexed column 4
 RESULTS_DIR = os.path.join(SCRIPT_DIR, "results")
 BENCHMARK_RESULTS_PATH = os.path.join(RESULTS_DIR, "benchmarkResults.txt")
-STATIC_RESULT_PLOT_PATH = os.path.join(RESULTS_DIR, f"static_{FAULT_TYPE_NAME}_{CONDITION_NAME}.png")
-AXIS_LIMIT = 4.0
+N_PLOTS = 10  # files plotted, evenly spaced over the whole run
+N_LAST = 5  # additionally the last N files of the run
 
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
@@ -57,20 +55,27 @@ def plot_embedding(ax, tde, title="offline-TDE", benchmark_results_path=BENCHMAR
     scores_norm = (scores - np.min(scores)) / (np.max(scores) - np.min(scores))
     ax.scatter(projected[:, 0], projected[:, 1], s=8, c=colormaps["turbo"](scores_norm), alpha=0.6)
     ax.axis("off")
-    ax.set_xlim(-AXIS_LIMIT, AXIS_LIMIT)
-    ax.set_ylim(-AXIS_LIMIT, AXIS_LIMIT)
+    limit = np.abs(projected).max() * 1.05  # per-plot axis: IMS amplitudes change a lot over the run
+    ax.set_xlim(-limit, limit)
+    ax.set_ylim(-limit, limit)
     ax.set_aspect("equal", adjustable="box")
     ax.set_title(title, fontsize=30)
 
 
-df = pd.read_csv(LASPI_DATA_PATH, header=None)
-values = df[0].to_numpy()
+names = sorted(os.listdir(IMS_DIR))
 
-# Input: values.npy as a 1D numpy array, ideally a vibration
-fig, ax = plt.subplots(figsize=(7, 7))
-tde = time_delay_embedding(values, d=25, tau=13, stride=1)
-plot_embedding(ax, tde)
+# N_PLOTS files evenly spaced over the run (first and last included) plus the last N_LAST files, each plotted individually
+indices = np.linspace(0, len(names) - 1, N_PLOTS).round().astype(int).tolist()
+indices += [i for i in range(len(names) - N_LAST, len(names)) if i not in indices]
+for i in indices:
+    name = names[i]
+    df = pd.read_csv(os.path.join(IMS_DIR, name), header=None, sep="	")
+    values = df[IMS_COLUMN].to_numpy()
 
-plt.tight_layout()
-plt.savefig(STATIC_RESULT_PLOT_PATH)
-plt.show()
+    fig, ax = plt.subplots(figsize=(7, 7))
+    tde = time_delay_embedding(values, d=2500, tau=1, stride=1)
+    plot_embedding(ax, tde, title=name)
+
+    plt.tight_layout()
+    plt.savefig(os.path.join(RESULTS_DIR, f"static_IMS_1st_test_{name}.png"))
+    plt.show()
