@@ -10,16 +10,8 @@
 extern "C"
 {
 #endif
-    typedef struct
-    {
-        double* data_;
-        int currentIndex_;
-        int size_;
-    } Buffer;
-    int initBuffer(Buffer *buffer, int size_);
-
-    int processNewDataPoint(double newValue, double* tde, Buffer* slidingWindow, Buffer* runningMean,
-                            Buffer* runningCov, Buffer* runningScatter,double* eigenvalues, double* eigenvectors,
+    int processNewDataPoint(double newValue, double* tde, double* slidingWindow, double* runningMean,
+                            double* runningCov, double* runningScatter,double* eigenvalues, double* eigenvectors,
                             int* indexes, int windowSize, int dimensions,
                             double* outX, double* outY);
 
@@ -29,7 +21,7 @@ extern "C"
 
     void embeddingIndexes(int* buffer, int windowSize, int dimensions, int tau);
 
-    int PCA(Buffer* runningMean, Buffer* runningCov, Buffer* runningScatter,double* tde, Buffer* slidingWindow, int dimensions,
+    int PCA(double* runningMean, double* runningCov, double* runningScatter,double* tde, double* slidingWindow, int dimensions,
             int windowSize, double newValue, int* indexes);
 
     void updateMean(double* runningMean, int dimensions, int n, const double* newEmbedded, const double* oldEmbedded);
