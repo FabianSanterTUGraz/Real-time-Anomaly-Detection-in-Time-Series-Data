@@ -2,8 +2,9 @@
 
 // Main api call
 static int counter = 0;
-int processNewDataPoint(double newValue, double* tde, double* slidingWindow, double* runningMean,
-                        double* runningCov, double* runningScatter,double* principalComponent1, double* principalComponent2, int* indexes,
+static int sampleCount = 0;
+int processNewDataPoint(double newValue, double* tde, Buffer* slidingWindow, Buffer* runningMean,
+                        Buffer* runningCov, Buffer* runningScatter,double* principalComponent1, double* principalComponent2, int* indexes,
                         int windowSize, int dimensions, double* outX, double* outY)
 {
     if (PCA(runningMean, runningCov, runningScatter,tde, slidingWindow, dimensions, windowSize, newValue, indexes) == 1)
@@ -14,12 +15,12 @@ int processNewDataPoint(double newValue, double* tde, double* slidingWindow, dou
     if(counter > 200)
     {
         counter = 0;
-        subspaceIteration(runningCov, dimensions, principalComponent1, principalComponent2);
+        //subspaceIteration(runningCov->data_ ,dimensions, principalComponent1, principalComponent2);
     }
     counter++;
 
-    *outX = dotProduct(tde,principalComponent1,dimensions);
-    *outY = dotProduct(tde,principalComponent2,dimensions);
+    //*outX = dotProduct(tde,principalComponent1,dimensions);
+    //*outY = dotProduct(tde,principalComponent2,dimensions);
 
     return 0;
 }
@@ -92,7 +93,7 @@ void subspaceIteration(const double* runningCov, int dim, double* q1, double* q2
     // additionaly c pulls everything toward the first principle component
 
     //1.0 Normalize the first pc by dividing z1 by its length
-    double norm1 = sqrtf(dotProduct(z1, z1, dim));
+    double norm1 = sqrt(dotProduct(z1, z1, dim));
     if (norm1 > 1e-5f)
     {
         for (int i = 0; i < dim; i++)
@@ -106,7 +107,7 @@ void subspaceIteration(const double* runningCov, int dim, double* q1, double* q2
     for (int i = 0; i < dim; i++) z2[i] -= proj * q1[i];
 
     //normalization of q2
-    double norm2 = sqrtf(dotProduct(z2, z2, dim));
+    double norm2 = sqrt(dotProduct(z2, z2, dim));
     if (norm2 > 1e-5f)
     {
         for (int i = 0; i < dim; i++) {
@@ -123,55 +124,9 @@ void subspaceIteration(const double* runningCov, int dim, double* q1, double* q2
     }
 }
 
-int PCA(double* runningMean, double* runningCov, double* runningScatter,double* tde, double* slidingWindow, int dimensions,
+int PCA(Buffer* runningMean, Buffer* runningCov, Buffer* runningScatter,double* tde, Buffer* slidingWindow, int dimensions,
         int windowSize, double newValue, int* indexes)
 {
-    static int sampleCount = 0; // reusing in C++/Java frage wichtig static
-
-    int tau = indexes[0] - indexes[1];
-    bool isWindowFull = (sampleCount >= windowSize);
-
-    double tdeOldRaw[dimensions];
-    double tdeOldCentered[dimensions];
-    double* oldCenteredAddress = NULL;
-    double* oldRawAddress = NULL;
-
-    if (isWindowFull)
-    {
-        embedding(tdeOldRaw,slidingWindow,dimensions,indexes);
-        centerData(runningMean, tdeOldRaw, tdeOldCentered, dimensions);
-        oldCenteredAddress = tdeOldCentered;
-        oldRawAddress = tdeOldRaw;
-    }
-
-    slideWindow(slidingWindow, windowSize, newValue);
-    sampleCount++;
-
-    int minSamples = (dimensions - 1) * tau + 1;
-    if (sampleCount < minSamples)
-    {
-        return 1;
-    }
-
-    int sampleSize = isWindowFull ? (windowSize - (dimensions - 1) * tau) : (sampleCount - (dimensions - 1) * tau);
-
-    embedding(tde, slidingWindow, dimensions, indexes);
-
-    double tdeCenteredOldMean[dimensions];
-    if (!isWindowFull) {
-        centerData(runningMean,tde,tdeCenteredOldMean,dimensions);
-    }
-
-    updateMean(runningMean, dimensions, sampleSize, tde, oldRawAddress);
-    centerData(runningMean, tde, tde, dimensions);
-
-    if (isWindowFull) {
-        updateCovariance(runningCov,dimensions,tde, oldCenteredAddress,sampleSize);
-    }else {
-        updateCovarianceIncremental(runningScatter, dimensions, tdeCenteredOldMean, tde, sampleSize);
-        scatterToCovariance(runningScatter, runningCov, dimensions, sampleSize);
-    }
-
     return 0;
 }
 
@@ -259,4 +214,12 @@ double dotProduct(const double* v1, const double* v2, int dim)
         sum += v1[i] * v2[i];
     }
     return sum;
+}
+
+int initBuffer(Buffer* buffer,int size)
+{
+    buffer->data_ = (double*)calloc((size_t)size, sizeof(double) * sizeof(double));
+    buffer->size_ = size;
+    buffer->currentIndex_ = size - 1;
+    return 0;
 }

@@ -48,19 +48,49 @@ int main(int argc, char* argv[])
     int tau = std::stoi(argv[2]);        // delay between successive embedding coordinates
     const int windowSize = std::stoi(argv[3]); // length of the sliding window buffer
 
-    std::vector<double> slidingWindow(windowSize, 0.0f); // raw streaming values
+    //std::vector<double> slidingWindow(windowSize, 0.0f); // raw streaming values
     double tde[dimensions];           // current time-delay embedding vector
     std::fill(tde, tde + dimensions, 0.0f);
+
+    //Window init
+    Buffer slidingWindow;
+    int successfulWindowCreation = initBuffer(&slidingWindow, windowSize);
+    if(successfulWindowCreation != 0)
+    {
+        std::cout << "Window creation failed" << std::endl;
+        return -1;
+    }
+
+    //Mean init
+    Buffer runningMean;
+    int successfulMeanCreation = initBuffer(&runningMean, dimensions);
+    if(successfulMeanCreation != 0)
+    {
+        std::cout << "Mean buffer creation failed" << std::endl;
+        return -1;
+    }
+
+    //running cov matrix
+    Buffer runningCov;
+    int successfulCovCreation = initBuffer(&runningCov, dimensions * dimensions);
+    if(successfulCovCreation != 0)
+    {
+        std::cout << "Cov creation failed" << std::endl;
+        return -1;
+    }
+
+    //scatter matrix
+    Buffer runningScatter;
+    int successfulScatterCreation = initBuffer(&runningScatter, dimensions * dimensions);
+    if(successfulScatterCreation != 0)
+    {
+        std::cout << "Cov creation failed" << std::endl;
+        return -1;
+    }
 
     // Precompute the sliding-window offsets used to build each embedding.
     int tdeIndexes[dimensions];
     embeddingIndexes(tdeIndexes, windowSize, dimensions, tau);
-
-    // Incrementally updated statistics for streaming PCA.
-    double* runningMean    = (double*)calloc((size_t)dimensions, sizeof(double));
-    double* runningCov     = (double*)calloc((size_t)dimensions * (size_t)dimensions, sizeof(double));
-    double* runningScatter = (double*)calloc((size_t)dimensions * (size_t)dimensions, sizeof(double));
-
 
     // Top two principal components (eigenvectors) of the embedding.
     double principalComponent1[dimensions] = {0.0f};
@@ -83,7 +113,7 @@ int main(int argc, char* argv[])
         }
         double value = std::stof(line);
 
-        if (processNewDataPoint(value, tde, slidingWindow.data(), runningMean, runningCov, runningScatter,principalComponent1,
+        if (processNewDataPoint(value, tde, &slidingWindow, &runningMean, &runningCov, &runningScatter,principalComponent1,
                                 principalComponent2, tdeIndexes, windowSize, dimensions,
                                 &outX, &outY) != 1)
         {
@@ -93,9 +123,5 @@ int main(int argc, char* argv[])
     }
     std::string outputPath = "output/output.txt";
     writeData(outputPath, writeToFile, false);
-
-    free(runningMean);
-    free(runningCov);
-    free(runningScatter);
     return 0;
 }
