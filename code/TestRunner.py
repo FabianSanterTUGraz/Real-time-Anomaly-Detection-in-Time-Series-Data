@@ -1,9 +1,9 @@
 """
-ims_start_end_blocks.py  (lives next to TestRunner.py in code/)
+ims_each_file.py  (lives next to TestRunner.py in code/)
 
-For every selected IMS test set and bearing: the first N_PER_BLOCK and the last
-N_PER_BLOCK snapshot files are fed one by one into the C++ program, and the
-fingerprints are plotted side by side ("start  ~>  end").
+For ONE IMS test set (folder) and the selected bearing(s), snapshot files are fed one by one
+into the C++ program and every fingerprint is plotted as its own figure, in chronological order.
+Which files: every FILE_STEP-th file (0, FILE_STEP, 2*FILE_STEP, ...) plus always the last N_LAST.
 
 IMS layout: IMS/<set>/<set>/<timestamp>  (or IMS/<set>/<timestamp>), each file
 20480 rows, tab-separated, no header, one column per channel.
@@ -13,19 +13,23 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from matplotlib import gridspec
 from matplotlib.pyplot import colormaps
 
 # ============================================================
 # Parameters
 # ============================================================
-d = 600                 # ~ one shaft revolution (2000 RPM at 20 kHz)
+d = 1200                 # ~ one shaft revolution (2000 RPM at 20 kHz)
 tau = 1
 window_size = 20480     # = one snapshot file
-N_PER_BLOCK = 5         # files at the start / at the end of the run
 
-SETS = ["1st_test", "2nd_test", "3rd_test"]
-BEARINGS = None         # None = all 4 bearings, or e.g. [3, 4]
+SET = "2nd_test"        # one folder: "1st_test", "2nd_test" or "3rd_test"
+BEARINGS = [1]          # bearing NUMBERS 1-4 (not column indices!): [1], [3, 4], 4 or None = all
+
+FILE_STEP = 100         # plot every FILE_STEP-th file (1 = every file)
+N_LAST = 5              # additionally always the last N_LAST files (0 = none)
+
+SHOW_PLOTS = True       # show every figure (with many files: False and look at the saved PNGs)
+SAVE_PLOTS = True       # save to results/IMS_<set>_bearing<n>/
 
 SET_CHANNELS = {        # bearing -> 0-based column (IMS readme); set 1: x-channel of each bearing
     "1st_test": {1: 0, 2: 2, 3: 4, 4: 6},
@@ -50,6 +54,37 @@ for p in (RESULTS, os.path.dirname(INPUT), os.path.dirname(OUTPUT)):
 FILENAME_RE = re.compile(r"^\d{4}\.\d{2}\.\d{2}\.\d{2}\.\d{2}\.\d{2}$")
 
 
+# ============================================================
+# Configuration checks
+# ============================================================
+def selected_bearings(set_name):
+    """BEARINGS as a list; checks that every bearing exists for this set (clear error instead of KeyError)."""
+    if BEARINGS is None:
+        bearings = sorted(SET_CHANNELS[set_name])
+    elif isinstance(BEARINGS, (list, tuple)):
+        bearings = list(BEARINGS)
+    else:
+        bearings = [BEARINGS]
+    valid = SET_CHANNELS[set_name]
+    for b in bearings:
+        if b not in valid:
+            mapping = ", ".join(f"bearing {k} -> column {v}" for k, v in valid.items())
+            raise ValueError(f"BEARINGS contains {b!r}, but {set_name} only has bearings 1-4 ({mapping}). "
+                             f"Use bearing numbers, not column indices.")
+    return bearings
+
+
+def check_config():
+    if SET not in SET_CHANNELS:
+        raise ValueError(f"unknown set {SET!r}, choose from {list(SET_CHANNELS)}")
+    selected_bearings(SET)
+    if FILE_STEP < 1 or N_LAST < 0:
+        raise ValueError("FILE_STEP must be >= 1 and N_LAST >= 0")
+
+
+# ============================================================
+# Files and C++ run
+# ============================================================
 def resolve_test_dir(set_name):
     """Extracted .rar archives nest a duplicate folder (e.g. 2nd_test/2nd_test)."""
     for folder in (os.path.join(IMS_ROOT, set_name, set_name), os.path.join(IMS_ROOT, set_name)):
@@ -67,7 +102,7 @@ def list_snapshot_files(folder):
 def read_output():
     """Reads x,y lines of the FIRST block (everything before the first '---').
     Works for both driver variants (one line per sample, or window blocks ending with '---').
-    Broken lines (e.g. -nan(ind) from MSVC) are skipped instead of crashing np.loadtxt."""
+    Broken lines (e.g. -nan(ind) from MSVC) are skipped."""
     rows, bad = [], 0
     with open(OUTPUT, "r", encoding="utf-8", errors="replace") as fh:
         for line in fh:
@@ -86,7 +121,7 @@ def read_output():
             else:
                 bad += 1
     if bad:
-        print(f"    ({bad} fehlerhafte/NaN-Zeilen übersprungen)")
+        print(f"      ({bad} fehlerhafte/NaN-Zeilen übersprungen)")
     return np.array(rows) if rows else None
 
 
@@ -94,91 +129,73 @@ def fingerprint(snapshot_file, col):
     """One IMS snapshot file -> one C++ run -> fingerprint (L, 2) or None."""
     df = pd.read_csv(snapshot_file, header=None, sep="\t", usecols=[col])
     df[col].to_csv(INPUT, index=False, header=False)
+    if os.path.exists(OUTPUT):
+        os.remove(OUTPUT)                      # never plot a stale output of a previous run
     subprocess.run([EXE, str(d), str(tau), str(window_size), "input"],
                    cwd=BASE, check=True, stdout=subprocess.DEVNULL)
+    if not os.path.exists(OUTPUT):
+        print("      C++ hat keine output.txt geschrieben")
+        return None
     return read_output()
 
 
-def short_time(name):
-    """'2004.02.12.10.32.39' -> '02-12 10:32'"""
-    p = name.split(".")
-    return f"{p[1]}-{p[2]} {p[3]}:{p[4]}"
-
-
-def plot_blocks(png_path, title, block1, block2, block1_title, block2_title):
-    n1, n2 = len(block1), len(block2)
-    fig = plt.figure(figsize=(2.5 * (n1 + n2 + 1), 3.5))
-    gs = gridspec.GridSpec(2, n1 + 1 + n2, height_ratios=[1, 12], hspace=0.05, wspace=0.05)
-
-    ax = fig.add_subplot(gs[0, :n1]); ax.axis('off')
-    ax.set_title(block1_title, fontsize=11, color='#2a7a2a')
-    ax = fig.add_subplot(gs[0, n1 + 1:]); ax.axis('off')
-    ax.set_title(block2_title, fontsize=11, color='#a02020')
-
-    def draw(ax, label, seg):
-        r = np.linalg.norm(seg - seg.mean(0), axis=1)
-        rn = (r - r.min()) / (r.max() - r.min() + 1e-12)
-        ax.scatter(seg[:, 0], seg[:, 1], s=2, c=colormaps["turbo"](rn), alpha=0.7)
-        ax.set_aspect('equal'); ax.axis('off'); ax.set_title(label, fontsize=7)
-
-    for i, (label, seg) in enumerate(block1):
-        draw(fig.add_subplot(gs[1, i]), label, seg)
-    for i, (label, seg) in enumerate(block2):
-        draw(fig.add_subplot(gs[1, n1 + 1 + i]), label, seg)
-
-    ax = fig.add_subplot(gs[1, n1]); ax.axis('off')
-    ax.text(0.5, 0.5, "⟿", ha='center', va='center', fontsize=48,
-            color='#444444', transform=ax.transAxes)
-
-    fig.suptitle(title, fontsize=13, y=0.98)
-    plt.savefig(png_path, dpi=150, bbox_inches='tight')
-    plt.show()
+# ============================================================
+# Plotting (one figure per file)
+# ============================================================
+def plot_fingerprint(fp, title, png_path):
+    r = np.linalg.norm(fp - fp.mean(0), axis=1)
+    rn = (r - r.min()) / (r.max() - r.min() + 1e-12)
+    fig, ax = plt.subplots(figsize=(7, 7))
+    ax.scatter(fp[:, 0], fp[:, 1], s=8, c=colormaps["turbo"](rn), alpha=0.6)
+    limit = np.abs(fp).max() * 1.05
+    ax.set_xlim(-limit, limit)
+    ax.set_ylim(-limit, limit)
+    ax.set_aspect("equal", adjustable="box")
+    ax.axis("off")
+    ax.set_title(title, fontsize=20)
+    plt.tight_layout()
+    if png_path:
+        plt.savefig(png_path)
+    if SHOW_PLOTS:
+        plt.show()
     plt.close(fig)
 
 
 def main():
+    check_config()
     if not os.path.isfile(EXE):
-        raise FileNotFoundError(f"C++-Programm nicht gefunden: {EXE} - erst bauen (Release, -O2)")
+        raise FileNotFoundError(f"C++-Programm nicht gefunden: {EXE} - erst bauen (mingw32-make)")
 
-    for set_name in SETS:
-        test_dir = resolve_test_dir(set_name)
-        if test_dir is None:
-            print(f"{set_name}: keine Snapshot-Dateien unter {IMS_ROOT} gefunden - übersprungen")
-            continue
-        files = list_snapshot_files(test_dir)
-        if len(files) < 2 * N_PER_BLOCK:
-            print(f"{set_name}: nur {len(files)} Dateien - übersprungen")
-            continue
-        first = list(range(N_PER_BLOCK))
-        last = list(range(len(files) - N_PER_BLOCK, len(files)))
-        print(f"{set_name}: {len(files)} Dateien ({files[0].name} ... {files[-1].name})")
+    test_dir = resolve_test_dir(SET)
+    if test_dir is None:
+        raise FileNotFoundError(f"{SET}: keine Snapshot-Dateien unter {IMS_ROOT} gefunden")
+    files = list_snapshot_files(test_dir)
+    indices = sorted(set(range(0, len(files), FILE_STEP)) |
+                     set(range(max(0, len(files) - N_LAST), len(files))))
+    print(f"{SET}: {len(files)} Dateien, davon {len(indices)} ausgewählt "
+          f"(jede {FILE_STEP}. + die letzten {N_LAST}): {indices}")
 
-        for bearing in (BEARINGS or sorted(SET_CHANNELS[set_name])):
-            col = SET_CHANNELS[set_name][bearing]
-            note = FAILURE_NOTE.get(set_name, {}).get(bearing, "no failure recorded")
+    for bearing in selected_bearings(SET):
+        col = SET_CHANNELS[SET][bearing]
+        note = FAILURE_NOTE.get(SET, {}).get(bearing, "no failure recorded")
+        out_dir = os.path.join(RESULTS, f"IMS_{SET}_bearing{bearing}")
+        if SAVE_PLOTS:
+            os.makedirs(out_dir, exist_ok=True)
+        print(f"  bearing {bearing} (column {col}, {note}):", flush=True)
+
+        t_start = time.perf_counter()
+        for count, i in enumerate(indices, 1):
+            name = files[i].name
             t0 = time.perf_counter()
-
-            blocks = []
-            for idxs in (first, last):
-                b = []
-                for i in idxs:
-                    fp = fingerprint(files[i], col)
-                    if fp is None:
-                        print("  kein Fingerprint:", set_name, f"bearing {bearing}", files[i].name)
-                    else:
-                        b.append((f"#{i}  {short_time(files[i].name)}", fp))
-                blocks.append(b)
-            if not blocks[0] or not blocks[1]:
+            fp = fingerprint(files[i], col)
+            if fp is None:
+                print(f"    [{count}/{len(indices)}] #{i} {name}: kein Fingerprint")
                 continue
-
-            png = os.path.join(RESULTS, f"IMS_{set_name}_bearing{bearing}_start_end_d{d}.png")
-            plot_blocks(png,
-                        f"IMS {set_name} | bearing {bearing} ({note}) | d = {d} | tau = {tau}",
-                        blocks[0], blocks[1],
-                        f"Anfang (Dateien #{first[0]} – #{first[-1]})",
-                        f"Ende (Dateien #{last[0]} – #{last[-1]})")
-            print(f"  bearing {bearing}: gespeichert {os.path.basename(png)} "
-                  f"({time.perf_counter() - t0:.0f} s)")
+            png = os.path.join(out_dir, f"{i:04d}_{name}.png") if SAVE_PLOTS else None
+            plot_fingerprint(fp, f"#{i}  {name}", png)
+            eta = (time.perf_counter() - t_start) / count * (len(indices) - count)
+            print(f"    [{count}/{len(indices)}] #{i} {name}: {time.perf_counter() - t0:.1f} s "
+                  f"(noch ca. {eta / 60:.0f} min)", flush=True)
 
 
 if __name__ == "__main__":

@@ -15,7 +15,7 @@ from sklearn.decomposition import PCA
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 IMS_DIR = os.path.join(SCRIPT_DIR, "..", "IMS", "2nd_test", "2nd_test")
 IMS_COLUMN = 0  # Bearing 3 (inner race defect), Ch 5 = 0-indexed column 4
-RESULTS_DIR = os.path.join(SCRIPT_DIR, "results")
+RESULTS_DIR = os.path.join(SCRIPT_DIR, "..", "results")
 BENCHMARK_RESULTS_PATH = os.path.join(RESULTS_DIR, "benchmarkResults.txt")
 N_PLOTS = 10  # files plotted, evenly spaced over the whole run
 N_LAST = 5  # additionally the last N files of the run
