@@ -92,7 +92,7 @@ void subspaceIteration(const double* runningCov, int dim, double* q1, double* q2
     // additionaly c pulls everything toward the first principle component
 
     //1.0 Normalize the first pc by dividing z1 by its length
-    double norm1 = sqrtf(dotProduct(z1, z1, dim));
+    double norm1 = sqrt(dotProduct(z1, z1, dim));
     if (norm1 > 1e-5f)
     {
         for (int i = 0; i < dim; i++)
@@ -106,7 +106,7 @@ void subspaceIteration(const double* runningCov, int dim, double* q1, double* q2
     for (int i = 0; i < dim; i++) z2[i] -= proj * q1[i];
 
     //normalization of q2
-    double norm2 = sqrtf(dotProduct(z2, z2, dim));
+    double norm2 = sqrt(dotProduct(z2, z2, dim));
     if (norm2 > 1e-5f)
     {
         for (int i = 0; i < dim; i++) {
@@ -138,7 +138,11 @@ int PCA(double* runningMean, double* runningCov, double* runningScatter,double* 
 
     if (isWindowFull)
     {
-        embedding(tdeOldRaw,slidingWindow,dimensions,indexes);
+        int shift = windowSize - 1 - (dimensions - 1) * tau;
+        for (int i = 0; i < dimensions; i++)
+        {
+            tdeOldRaw[i] = slidingWindow[indexes[i] - shift];
+        }
         centerData(runningMean, tdeOldRaw, tdeOldCentered, dimensions);
         oldCenteredAddress = tdeOldCentered;
         oldRawAddress = tdeOldRaw;
