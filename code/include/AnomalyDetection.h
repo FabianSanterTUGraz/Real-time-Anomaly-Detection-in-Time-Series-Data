@@ -45,8 +45,9 @@ extern "C"
 
     void scatterToCovariance(const double* scatter, double* covOut, int dimensions, int sampleSize);
 
-    void downdateScatter(double* runningScatter, int dimensions, const double* oldCenteredOldMean,
-                     const double* oldCenteredNewMean);
+    void slideScatter(double* runningScatter, int dimensions,
+                  const double* newCenteredOldMean, const double* newCenteredNewMean,
+                  const double* oldCenteredOldMean, const double* oldCenteredNewMean);
 #ifdef __cplusplus
 }
 #endif

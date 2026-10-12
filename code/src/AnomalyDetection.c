@@ -14,7 +14,7 @@ int processNewDataPoint(double newValue, double* tde, double* slidingWindow, dou
     if(counter > 200)
     {
         counter = 0;
-        subspaceIteration(runningCov, dimensions, principalComponent1, principalComponent2);
+        subspaceIteration(runningScatter, dimensions, principalComponent1, principalComponent2);
     }
     counter++;
 
@@ -167,19 +167,14 @@ int PCA(double* runningMean, double* runningCov, double* runningScatter,double* 
     updateMean(runningMean, dimensions, sampleSize, tde, oldRawAddress);
     centerData(runningMean, tde, tde, dimensions);
 
-    updateCovarianceIncremental(runningScatter, dimensions, tdeCenteredOldMean, tde, sampleSize);
-
-
     if (isWindowFull) {
         double oldCenteredNewMean[dimensions];
         centerData(runningMean, tdeOldRaw, oldCenteredNewMean, dimensions);
-        downdateScatter(runningScatter, dimensions, oldCenteredAddress, oldCenteredNewMean);
+        slideScatter(runningScatter, dimensions, tdeCenteredOldMean, tde, oldCenteredAddress, oldCenteredNewMean);
     }
-
-    if (isWindowFull) {
-        updateCovariance(runningCov,dimensions,tde, oldCenteredAddress,sampleSize);
-    }else {
-        scatterToCovariance(runningScatter, runningCov, dimensions, sampleSize);
+    else
+    {
+        updateCovarianceIncremental(runningScatter, dimensions, tdeCenteredOldMean, tde, sampleSize);
     }
 
     return 0;
@@ -271,14 +266,18 @@ double dotProduct(const double* v1, const double* v2, int dim)
     return sum;
 }
 
-void downdateScatter(double* runningScatter, int dimensions, const double* oldCenteredOldMean,
-                     const double* oldCenteredNewMean)
+// add the new vector and remove the old one in ONE pass over the scatter matrix
+void slideScatter(double* runningScatter, int dimensions,
+                  const double* newCenteredOldMean, const double* newCenteredNewMean,
+                  const double* oldCenteredOldMean, const double* oldCenteredNewMean)
 {
     for (int i = 0; i < dimensions; i++)
     {
+        double a = newCenteredOldMean[i];
+        double c = oldCenteredOldMean[i];
         for (int j = 0; j < dimensions; j++)
         {
-            runningScatter[indexAccessHelper(i, j, dimensions)] -= oldCenteredOldMean[i] * oldCenteredNewMean[j];
+            runningScatter[indexAccessHelper(i, j, dimensions)] += a * newCenteredNewMean[j] - c * oldCenteredNewMean[j];
         }
     }
 }
