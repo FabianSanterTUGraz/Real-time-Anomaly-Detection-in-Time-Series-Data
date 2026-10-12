@@ -162,17 +162,23 @@ int PCA(double* runningMean, double* runningCov, double* runningScatter,double* 
     embedding(tde, slidingWindow, dimensions, indexes);
 
     double tdeCenteredOldMean[dimensions];
-    if (!isWindowFull) {
-        centerData(runningMean,tde,tdeCenteredOldMean,dimensions);
-    }
+    centerData(runningMean,tde,tdeCenteredOldMean,dimensions);
 
     updateMean(runningMean, dimensions, sampleSize, tde, oldRawAddress);
     centerData(runningMean, tde, tde, dimensions);
 
+    updateCovarianceIncremental(runningScatter, dimensions, tdeCenteredOldMean, tde, sampleSize);
+
+
+    if (isWindowFull) {
+        double oldCenteredNewMean[dimensions];
+        centerData(runningMean, tdeOldRaw, oldCenteredNewMean, dimensions);
+        downdateScatter(runningScatter, dimensions, oldCenteredAddress, oldCenteredNewMean);
+    }
+
     if (isWindowFull) {
         updateCovariance(runningCov,dimensions,tde, oldCenteredAddress,sampleSize);
     }else {
-        updateCovarianceIncremental(runningScatter, dimensions, tdeCenteredOldMean, tde, sampleSize);
         scatterToCovariance(runningScatter, runningCov, dimensions, sampleSize);
     }
 
@@ -263,4 +269,16 @@ double dotProduct(const double* v1, const double* v2, int dim)
         sum += v1[i] * v2[i];
     }
     return sum;
+}
+
+void downdateScatter(double* runningScatter, int dimensions, const double* oldCenteredOldMean,
+                     const double* oldCenteredNewMean)
+{
+    for (int i = 0; i < dimensions; i++)
+    {
+        for (int j = 0; j < dimensions; j++)
+        {
+            runningScatter[indexAccessHelper(i, j, dimensions)] -= oldCenteredOldMean[i] * oldCenteredNewMean[j];
+        }
+    }
 }

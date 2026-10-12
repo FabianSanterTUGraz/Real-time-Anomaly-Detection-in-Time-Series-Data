@@ -44,6 +44,9 @@ extern "C"
                                   const double* deltaOld, const double* deltaNew, int sampleSize);
 
     void scatterToCovariance(const double* scatter, double* covOut, int dimensions, int sampleSize);
+
+    void downdateScatter(double* runningScatter, int dimensions, const double* oldCenteredOldMean,
+                     const double* oldCenteredNewMean);
 #ifdef __cplusplus
 }
 #endif
