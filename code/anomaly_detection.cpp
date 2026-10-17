@@ -22,7 +22,8 @@ void writeData(std::string filePath, std::vector<float> fileToWrite, bool append
 
     if (!MyFile.is_open())
     {
-        std::cerr << "Error: Could not open or create file at path: " << filePath << std::endl;
+        std::cerr << "Error: Could not open or create file at path: " << filePath
+                  << std::endl;
         return;
     }
 
@@ -37,29 +38,29 @@ int main(int argc, char* argv[])
 {
     std::vector<float> writeToFile;
     std::cout << "Real time anomaly detection...." << std::endl;
-    //std::string fileInput = "19 - m1_mechanically_imbalanced_load_0.5Nm_m2_mechanically_imbalanced_on_background_half_speed";
     std::string fileInput = argv[4];
     std::string absolutePath = "Data/" + fileInput + ".csv";
     streamData DataStream(absolutePath);
     std::string line;
 
     // Time-delay embedding parameters.
-    const int dimensions = std::stoi(argv[1]); // number of embedding dimensions
-    int tau = std::stoi(argv[2]);        // delay between successive embedding coordinates
-    const int windowSize = std::stoi(argv[3]); // length of the sliding window buffer
+    const int dimensions = std::stoi(argv[1]);  // number of embedding dimensions
+    const int windowSize = std::stoi(argv[3]);  // length of the sliding window buffer
 
-    std::vector<double> slidingWindow(windowSize, 0.0f); // raw streaming values
-    double tde[dimensions];           // current time-delay embedding vector
+    std::vector<double> slidingWindow(windowSize, 0.0f);  // raw streaming values
+    double tde[dimensions];                               // current time-delay embedding vector
     std::fill(tde, tde + dimensions, 0.0f);
 
     // Precompute the sliding-window offsets used to build each embedding.
     int tdeIndexes[dimensions];
-    embeddingIndexes(tdeIndexes, windowSize, dimensions, tau);
+    embeddingIndexes(tdeIndexes, windowSize, dimensions);
 
     // Incrementally updated statistics for streaming PCA.
-    double* runningMean    = (double*)calloc((size_t)dimensions, sizeof(double));
-    double* runningCov     = (double*)calloc((size_t)dimensions * (size_t)dimensions, sizeof(double));
-    double* runningScatter = (double*)calloc((size_t)dimensions * (size_t)dimensions, sizeof(double));
+    double* runningMean = (double*)calloc((size_t)dimensions, sizeof(double));
+    double* runningCov =
+        (double*)calloc((size_t)dimensions * (size_t)dimensions, sizeof(double));
+    double* runningScatter =
+        (double*)calloc((size_t)dimensions * (size_t)dimensions, sizeof(double));
 
 
     // Top two principal components (eigenvectors) of the embedding.
@@ -83,9 +84,9 @@ int main(int argc, char* argv[])
         }
         double value = std::stof(line);
 
-        if (processNewDataPoint(value, tde, slidingWindow.data(), runningMean, runningCov, runningScatter,principalComponent1,
-                                principalComponent2, tdeIndexes, windowSize, dimensions,
-                                &outX, &outY) != 1)
+        if (processNewDataPoint(value, tde, slidingWindow.data(), runningMean, runningCov,
+                                runningScatter, principalComponent1, principalComponent2,
+                                tdeIndexes, windowSize, dimensions, &outX, &outY) != 1)
         {
             writeToFile.push_back(outX);
             writeToFile.push_back(outY);
