@@ -12,17 +12,15 @@ extern "C"
 #endif
     int processNewDataPoint(double newValue, double* tde, double* slidingWindow, double* runningMean,
                             double* runningCov, double* runningScatter,double* eigenvalues, double* eigenvectors,
-                            int* indexes, int windowSize, int dimensions,
+                            int windowSize, int dimensions,
                             double* outX, double* outY);
 
     void slideWindow(double* slidingWindow, int size, double value);
 
-    void embedding(double* buffer, double* slidingWindow, int size, int* indexes);
-
-    void embeddingIndexes(int* buffer, int windowSize, int dimensions, int tau);
+    void embedding(double* slidingWindow, int indexNewestValue, int dimensions, double* tde);
 
     int PCA(double* runningMean, double* runningCov, double* runningScatter,double* tde, double* slidingWindow, int dimensions,
-            int windowSize, double newValue, int* indexes);
+            int windowSize, double newValue);
 
     void updateMean(double* runningMean, int dimensions, int n, const double* newEmbedded, const double* oldEmbedded);
 
